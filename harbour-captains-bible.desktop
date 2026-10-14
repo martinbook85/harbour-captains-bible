@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+X-Nemo-Application-Type=silica-qt5
+Icon=harbour-captains-bible
+Exec=harbour-captains-bible
+Name=Captain's Bible
+
+[X-Sailjail]
+OrganizationName=org.myorg
+ApplicationName=harbour-captains-bible
+Permissions=Internet

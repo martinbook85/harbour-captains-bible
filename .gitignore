@@ -1,0 +1,19 @@
+# Qt Creator & Build output
+*.o
+*.pro.user*
+*.so
+Makefile
+build-*
+*.moc
+moc_*.cpp
+qrc_*.cpp
+
+# Sailfish SDK / RPM output
+*.rpm
+.sailfishos/
+RPMS/
+SRPMS/
+
+# SQLite-databaser om du inte vill ha med lokala testdata
+*.db
+*.sqlite
