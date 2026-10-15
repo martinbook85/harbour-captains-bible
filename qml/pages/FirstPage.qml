@@ -329,12 +329,11 @@ Page {
                         delegate: ListItem {
                             id: verseDelegate
                             width: parent.width
-                            contentHeight: Math.max(Theme.itemSizeSmall, verseCol.implicitHeight)
+                            contentHeight: verseCol.implicitHeight + Theme.paddingSmall
 
                             property bool expanded: false
                             property var vData: (modelData && typeof modelData === "object") ? modelData : ({})
                             property bool hasNote: !!(vData && vData.hasFootnote)
-                            property bool isParallel: !!(vData && vData.hasParallel)
                             property bool bookmarked: page.isBookmarked(vData)
 
                             menu: ContextMenu {
@@ -356,9 +355,11 @@ Page {
                             Column {
                                 id: verseCol
                                 width: parent.width
-                                anchors.centerIn: parent
+                                anchors.top: parent.top
+                                anchors.topMargin: Theme.paddingExtraSmall
                                 spacing: Theme.paddingExtraSmall
 
+                                // Verstext (bevarar alla inlinemarkörer)
                                 Label {
                                     id: verseLabel
                                     width: parent.width
@@ -371,7 +372,8 @@ Page {
                                         if (!verseDelegate.vData || typeof verseDelegate.vData.verse === "undefined") return ""
 
                                         var vNum = verseDelegate.vData.verse
-                                        var vNumFormatted = verseDelegate.isParallel
+                                        // Understryk versnumret om versen har en fotnot att fälla ut
+                                        var vNumFormatted = verseDelegate.hasNote
                                                             ? "<u><b>" + vNum + "</b></u>"
                                                             : "<b>" + vNum + "</b>"
 
@@ -379,6 +381,7 @@ Page {
                                     }
                                 }
 
+                                // Utfällbar fotnotslåda som visas vid tryck
                                 Label {
                                     id: noteLabel
                                     width: parent.width
