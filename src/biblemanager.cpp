@@ -240,6 +240,8 @@ QVariantList BibleManager::getInstalledBibles()
             QVariantMap map;
             map["moduleName"] = m.name;
             map["title"] = m.description;
+            // Lägger till det mänskligt läsbara språknamnet (t.ex. "Svenska", "English")
+            map["language"] = getLanguageDisplayName(m.language);
             list.append(map);
         }
     }
@@ -258,6 +260,8 @@ QVariantList BibleManager::getInstalledCommentaries()
             QVariantMap map;
             map["moduleName"] = m.name;
             map["title"] = m.description;
+            // Lägger till det mänskligt läsbara språknamnet här också
+            map["language"] = getLanguageDisplayName(m.language);
             list.append(map);
         }
     }
@@ -748,29 +752,30 @@ QVariantMap BibleManager::getVerseByOffset(const QString &moduleName, int offset
 
     QString bookDisplay = rawBookId;
 
-    // 1. Hämta det visade boknamnet direkt från modulen via book_number
+    // 1. Fetch the book display name directly from the module via book_number
     if (bookNum > 0) {
         QSqlQuery qBook(db);
-        qBook.prepare("SELECT long_name, short_name FROM books WHERE book_number = :num LIMIT 1");
+        qBook.prepare("SELECT short_name, long_name FROM books WHERE book_number = :num LIMIT 1");
         qBook.bindValue(":num", bookNum);
 
         if (qBook.exec() && qBook.next()) {
-            QString fullName = qBook.value(0).toString().trimmed();
-            QString shortName = qBook.value(1).toString().trimmed();
-            bookDisplay = !fullName.isEmpty() ? fullName : (!shortName.isEmpty() ? shortName : rawBookId);
+            QString shortName = qBook.value(0).toString().trimmed();
+            QString fullName = qBook.value(1).toString().trimmed();
+            // Prefer short_name (e.g. "1 Kor") over long_name ("Första Korintierbrevet")
+            bookDisplay = !shortName.isEmpty() ? shortName : (!fullName.isEmpty() ? fullName : rawBookId);
         }
     } else {
-        // Fallback om boken inte fanns i vår statiska mappning: sök via short_name
+        // Fallback search via short_name
         QSqlQuery qBook(db);
-        qBook.prepare("SELECT book_number, long_name, short_name FROM books WHERE short_name = :id LIMIT 1");
+        qBook.prepare("SELECT book_number, short_name, long_name FROM books WHERE short_name = :id LIMIT 1");
         qBook.bindValue(":id", rawBookId);
         if (qBook.exec() && qBook.next()) {
             bookNum = qBook.value(0).toInt();
-            QString fullName = qBook.value(1).toString().trimmed();
-            QString shortName = qBook.value(2).toString().trimmed();
-            bookDisplay = !fullName.isEmpty() ? fullName : (!shortName.isEmpty() ? shortName : rawBookId);
+            QString shortName = qBook.value(1).toString().trimmed();
+            QString fullName = qBook.value(2).toString().trimmed();
+            bookDisplay = !shortName.isEmpty() ? shortName : (!fullName.isEmpty() ? fullName : rawBookId);
         }
-    }
+     }
 
     QString text = "";
 

@@ -15,7 +15,7 @@ CoverBackground {
     property string verseRef: ""
     property string verseText: qsTr("Loading...")
 
-    // Beräknar dynamiskt datumet baserat på offset
+    // Dynamic date calculation based on offset
     property string currentDateStr: {
         var d = new Date()
         d.setDate(d.getDate() + daysOffset)
@@ -30,7 +30,6 @@ CoverBackground {
 
             if (votd && (votd.reference || votd.text)) {
                 verseRef = votd.reference || qsTr("Verse of the Day");
-                // Om texten saknas i '.text', kollar vi om den ligger i '.content' eller '.verseText'
                 verseText = votd.text || votd.content || votd.verseText || qsTr("No verse text available for this date.");
             } else {
                 verseRef = qsTr("Verse of the Day");
@@ -48,7 +47,7 @@ CoverBackground {
         }
     }
 
-    // Bakgrundsbild: 172icon.png placerad i qml/cover/
+    // Background watermark icon
     Image {
         id: iconOutline
         anchors.centerIn: parent
@@ -63,7 +62,8 @@ CoverBackground {
         anchors {
             fill: parent
             margins: Theme.paddingMedium
-            bottomMargin: Theme.itemSizeSmall
+            // Reserve exact clearance for CoverActionList at the bottom
+            bottomMargin: Theme.itemSizeNormal
         }
         spacing: Theme.paddingExtraSmall
 
@@ -75,7 +75,7 @@ CoverBackground {
             horizontalAlignment: Text.AlignHCenter
         }
 
-        // Dynamiskt datum som uppdateras när man klickar bakåt/framåt
+        // Dynamic Date
         Label {
             width: parent.width
             text: currentDateStr
@@ -90,16 +90,15 @@ CoverBackground {
             horizontalAlignment: Qt.AlignHCenter
         }
 
-        // Tätt packad referens och vers utan dubblering
         Column {
             width: parent.width
             spacing: Theme.paddingExtraSmall
 
+            // Shortened Reference Header (e.g. "1 Kor 1:10")
             Label {
                 id: refLabel
                 width: parent.width
                 text: verseRef
-                // Primary color for full-opacity contrast on any ambiance
                 color: Theme.primaryColor
                 font.pixelSize: Theme.fontSizeSmall
                 font.bold: true
@@ -107,16 +106,16 @@ CoverBackground {
                 truncationMode: TruncationMode.Fade
             }
 
+            // Expanded Verse Text Area (fits up to 9 lines gracefully)
             Label {
                 id: verseLabel
                 width: parent.width
-                height: implicitHeight
                 text: verseText
-                // Changed from secondaryColor to primaryColor for sharp readability
                 color: Theme.primaryColor
-                font.pixelSize: Theme.fontSizeExtraSmall
+                font.pixelSize: Theme.fontSizeExtraSmall - 1
                 wrapMode: Text.Wrap
-                maximumLineCount: 6
+                maximumLineCount: 9
+                truncationMode: TruncationMode.Fade
                 font.italic: true
                 horizontalAlignment: Text.AlignHCenter
             }

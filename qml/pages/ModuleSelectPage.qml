@@ -11,39 +11,121 @@ Page {
 
     signal moduleSelected(string moduleName)
 
-    SilicaListView {
-        anchors.fill: parent
-        model: page.biblesList
+    // Helper to group flat biblesList into array of { language: "Svenska", modules: [...] }
+    property var groupedLanguageList: {
+        if (!biblesList || biblesList.length === 0) return []
 
-        header: PageHeader {
-            title: page.pageTitle
+        var groupsMap = {}
+        var order = []
+
+        for (var i = 0; i < biblesList.length; i++) {
+            var item = biblesList[i]
+            var lang = (typeof item === "object" && item.language) ? item.language : qsTr("Other")
+
+            if (!groupsMap[lang]) {
+                groupsMap[lang] = []
+                order.push(lang)
+            }
+            groupsMap[lang].push(item)
         }
 
-        delegate: BackgroundItem {
-            id: delegateItem
+        var result = []
+        for (var j = 0; j < order.length; j++) {
+            var lName = order[j]
+            result.push({
+                "language": lName,
+                "modules": groupsMap[lName]
+            })
+        }
+        return result
+    }
+
+    SilicaFlickable {
+        anchors.fill: parent
+        contentHeight: contentColumn.height + Theme.paddingLarge
+
+        Column {
+            id: contentColumn
             width: parent.width
 
-            property string modName: (typeof modelData === "object" && modelData !== null)
-                                     ? (modelData.moduleName || modelData["moduleName"] || "")
-                                     : modelData
-            property string modTitle: (typeof modelData === "object" && modelData !== null)
-                                      ? (modelData.title || modelData["title"] || modName)
-                                      : modelData
-
-            property bool isSelected: modName === page.currentModule
-
-            Label {
-                x: Theme.horizontalPageMargin
-                anchors.verticalCenter: parent.verticalCenter
-                width: parent.width - (2 * Theme.horizontalPageMargin)
-                text: modTitle
-                color: isSelected ? Theme.highlightColor : Theme.primaryColor
-                font.pixelSize: Theme.fontSizeMedium
+            PageHeader {
+                title: page.pageTitle
             }
 
-            onClicked: {
-                page.moduleSelected(modName)
-                pageStack.pop()
+            // Outer loop: Languages
+            Repeater {
+                model: page.groupedLanguageList
+
+                delegate: Column {
+                    width: parent.width
+                    spacing: Theme.paddingSmall
+
+                    property var groupData: modelData
+
+                    // Language Header Box
+                    Item {
+                        width: parent.width
+                        height: langBox.height + Theme.paddingMedium
+
+                        Rectangle {
+                            id: langBox
+                            anchors.centerIn: parent
+                            width: parent.width - (2 * Theme.horizontalPageMargin)
+                            height: langText.height + (2 * Theme.paddingSmall)
+                            color: Theme.rgba(Theme.highlightBackgroundColor, 0.15)
+                            radius: Theme.paddingSmall
+
+                            Label {
+                                id: langText
+                                anchors.centerIn: parent
+                                text: groupData.language || qsTr("Other")
+                                color: Theme.highlightColor
+                                font.pixelSize: Theme.fontSizeMedium
+                                font.bold: true
+                            }
+                        }
+                    }
+
+                    // Inner loop: Modules within this Language
+                    Repeater {
+                        model: groupData.modules
+
+                        delegate: BackgroundItem {
+                            id: delegateItem
+                            width: parent.width
+
+                            property string modName: (typeof modelData === "object" && modelData !== null)
+                                                     ? (modelData.moduleName || modelData["moduleName"] || "")
+                                                     : modelData
+                            property string modTitle: (typeof modelData === "object" && modelData !== null)
+                                                      ? (modelData.title || modelData["title"] || modName)
+                                                      : modelData
+
+                            property bool isSelected: modName === page.currentModule
+
+                            Label {
+                                x: Theme.horizontalPageMargin
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: parent.width - (2 * Theme.horizontalPageMargin)
+                                text: modTitle
+                                color: isSelected ? Theme.highlightColor : Theme.primaryColor
+                                font.pixelSize: Theme.fontSizeMedium
+                                truncationMode: TruncationMode.Fade
+                            }
+
+                            onClicked: {
+                                page.moduleSelected(modName)
+                                pageStack.pop()
+                            }
+                        }
+                    }
+
+                    // Bottom spacing between language groups
+                    Item {
+                        width: parent.width
+                        height: Theme.paddingMedium
+                    }
+                }
             }
         }
     }

@@ -1,7 +1,7 @@
 Name:       harbour-captains-bible
 Summary:    Captain's Bible
-Version:    0.1
-Release:    4
+Version:    0.2
+Release:    1
 License:    LICENSE
 URL:        http://example.org/
 Source0:    %{name}-%{version}.tar.bz2
@@ -40,5 +40,13 @@ desktop-file-install --delete-original \
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
-* Fri Oct 16 2026 Martin Book <martin@fambook.nu> 0.1-4
-- Only corrected a dependency
+* Fri Oct 16 2026 Your Name <your.email@example.com> 0.2-1
+- Added language dividers with custom boxes in ModuleSelectPage
+- Shortened book names in Verse of the Day to short format (e.g., "1 Kor")
+- Expanded verse text budget on CoverPage to fit up to 9 lines
+- Optimized circular chapter buffer for smooth 60fps swipes
+- Updated RPM versioning for OpenRepos release
+
+* Thu Oct 15 2026 Your Name <your.email@example.com> 0.1-4
+- Preserved original inline note markers in verse text
+- Initial cover action and circular buffer foundation
