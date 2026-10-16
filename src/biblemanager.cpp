@@ -360,40 +360,70 @@ QVariantList BibleManager::getChapterVerses(const QString &moduleName, const QSt
         hasFootnoteDb = commDb.open();
     }
 
+    // Regex to detect explicit markers at the start of a string:
+    // Captures circled letters/numbers (\u24B6-\u24E9, \u2460-\u2473), [1], (a), a), or *
+    QRegExp markerExtractor("^\\s*([\u24B6-\u24E9\u2460-\u2473]|\\[\\d+\\]|\\([a-zA-Z0-9]+\\)|[a-zA-Z0-9]+[\\)\\.]|\\*)\\s*(.*)$");
+
     while (q.next()) {
         int verse = q.value(0).toInt();
-        QString text = q.value(1).toString();
+        QString rawText = q.value(1).toString();
 
-        if (text.trimmed().isEmpty()) continue;
+        if (rawText.trimmed().isEmpty()) continue;
 
-        QStringList actualFootnotes;
-        QStringList parallelNotes;
+        QStringList formattedFootnotes;
+        QString displayText = rawText;
 
-        // Detect if text contains circled characters representing parallel references
-        QRegExp circledRegex("[\u24B6-\u24E9\u2460-\u2473]");
-        bool containsCircled = text.contains(circledRegex);
-
-        // 1. Extract translation / explanatory notes (<f>...</f> and <n>...</n>)
+        // 1. Process <f>...</f> and <n>...</n> tags
         QRegExp fTagRegex("<(f|n)>(.*?)</\\1>");
-        while (fTagRegex.indexIn(text) != -1) {
-            QString noteContent = fTagRegex.cap(2).trimmed();
-            if (!noteContent.isEmpty()) {
-                actualFootnotes.append(noteContent);
+        int pos = 0;
+        int autoIndex = 1;
+
+        while ((pos = fTagRegex.indexIn(rawText, pos)) != -1) {
+            QString innerText = fTagRegex.cap(2).trimmed();
+
+            // Strip internal HTML/XML formatting from the note body
+            QString cleanInner = innerText;
+            cleanInner.remove(QRegExp("<[^>]*>")).trimmed();
+
+            if (!cleanInner.isEmpty()) {
+                QString markerSymbol;
+                QString noteBody;
+
+                if (markerExtractor.indexIn(cleanInner) != -1) {
+                    // Marker symbol explicitly captured in Group 1
+                    markerSymbol = markerExtractor.cap(1).trimmed();
+                    // Remaining text captured in Group 2
+                    noteBody = markerExtractor.cap(2).trimmed();
+                } else {
+                    // Fallback marker if no symbol was prefixed inside the tag
+                    markerSymbol = QString("[%1]").arg(autoIndex++);
+                    noteBody = cleanInner;
+                }
+
+                if (!noteBody.isEmpty()) {
+                    formattedFootnotes.append(QString("<b>%1</b> %2").arg(markerSymbol, noteBody));
+                } else {
+                    formattedFootnotes.append(QString("<b>%1</b>").arg(markerSymbol));
+                }
             }
-            text.remove(fTagRegex.cap(0));
+
+            pos += fTagRegex.matchedLength();
         }
 
-        // 2. Extract parallel passage references (<r>...</r> and <p>...</p>)
+        // 2. Process cross-reference tags <r>...</r> and <p>...</p>
         QRegExp rTagRegex("<(r|p)>(.*?)</\\1>");
-        while (rTagRegex.indexIn(text) != -1) {
+        pos = 0;
+        while ((pos = rTagRegex.indexIn(rawText, pos)) != -1) {
             QString pContent = rTagRegex.cap(2).trimmed();
+            pContent.remove(QRegExp("<[^>]*>")).trimmed();
+
             if (!pContent.isEmpty()) {
-                parallelNotes.append(pContent);
+                formattedFootnotes.append(QString("<b>Ref:</b> %1").arg(pContent));
             }
-            text.remove(rTagRegex.cap(0));
+            pos += rTagRegex.matchedLength();
         }
 
-        // 3. Fetch notes from external commentaries database if available
+        // 3. Process external commentaries DB notes if present
         if (hasFootnoteDb) {
             QSqlQuery fq(commDb);
             fq.prepare("SELECT text FROM commentaries WHERE book_number = :book AND chapter_number_from = :chapter AND verse_number_from = :verse");
@@ -403,62 +433,32 @@ QVariantList BibleManager::getChapterVerses(const QString &moduleName, const QSt
             if (fq.exec()) {
                 while (fq.next()) {
                     QString sqlNote = fq.value(0).toString().trimmed();
+                    sqlNote.remove(QRegExp("<[^>]*>")).trimmed();
                     if (!sqlNote.isEmpty()) {
-                        actualFootnotes.append(sqlNote);
+                        formattedFootnotes.append(QString("<b>*</b> %1").arg(sqlNote));
                     }
                 }
             }
         }
 
-        // 4. Build expanded footnote content
-        QString combinedFootnote;
+        // 4. Format verse text for display (keep inline markers intact in main text)
+        displayText.replace(QRegExp("</?(f|n|r|p)>"), " ");
+        displayText.remove(QRegExp("<S>[^<]*</S>"));
+        displayText.remove(QRegExp("<m>[^<]*</m>"));
+        displayText.replace("<J>", "<font color='#d62828'>").replace("</J>", "</font>");
+        displayText.replace("<pb/>", "<br/><br/>").replace("<br/>", "<br/>");
+        displayText.replace("<t>", "<div style='margin-left: 15px;'>").replace("</t>", "</div>");
+        displayText.replace("&nbsp;", " ");
 
-        // Translation/explanatory notes start with '*'
-        for (QString note : actualFootnotes) {
-            note.remove(QRegExp("<[^>]*>"));
-            note.remove(QRegExp("^\\[?\\d+[\\)\\]\\.]\\s*"));
-            note.remove(QRegExp("^\\[?[a-zA-Z][\\)\\]\\.]\\s*"));
-            note = note.trimmed();
-
-            if (!note.isEmpty()) {
-                if (!combinedFootnote.isEmpty()) combinedFootnote += "\n";
-                combinedFootnote += "* " + note;
-            }
-        }
-
-        // Parallel passage notes start WITHOUT '*'
-        for (QString pNote : parallelNotes) {
-            pNote.remove(QRegExp("<[^>]*>")).trimmed();
-            if (!pNote.isEmpty()) {
-                if (!combinedFootnote.isEmpty()) combinedFootnote += "\n";
-                combinedFootnote += "Parallel: " + pNote;
-            }
-        }
-
-        // Replace numbered markers like [1], [2] in main text with a blue asterisk (*)
-        text.replace(QRegExp("\\[\\d+\\]"), "<font color='#007acc'><b>*</b></font>");
-
-        // Strip circled letters/numbers from main text
-        text.remove(circledRegex);
-
-        // Strip Strong's tags and clean HTML markup
-        text.remove(QRegExp("<S>[^<]*</S>"));
-        text.remove(QRegExp("<m>[^<]*</m>"));
-        text.replace("<J>", "<font color='#d62828'>").replace("</J>", "</font>");
-        text.replace("<pb/>", "<br/><br/>").replace("<br/>", "<br/>");
-        text.replace("<t>", "<div style='margin-left: 15px;'>").replace("</t>", "</div>");
-        text.remove(QRegExp("<[^>]*>"));
-        text.replace("&nbsp;", " ");
-
-        bool hasParallel = !parallelNotes.isEmpty() || containsCircled;
+        QString combinedFootnote = formattedFootnotes.join("<br/>");
         bool hasFootnote = !combinedFootnote.trimmed().isEmpty();
 
         QVariantMap verseMap;
         verseMap["verse"] = verse;
-        verseMap["text"] = text.trimmed();
+        verseMap["text"] = displayText.trimmed();
         verseMap["footnote"] = combinedFootnote.trimmed();
         verseMap["hasFootnote"] = hasFootnote;
-        verseMap["hasParallel"] = hasParallel;
+        verseMap["hasParallel"] = (rawText.contains("<r>") || rawText.contains("<p>"));
 
         versesList.append(verseMap);
     }
