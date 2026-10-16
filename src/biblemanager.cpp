@@ -16,6 +16,7 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QMap>
+#include <QSqlDatabase>
 
 BibleManager::BibleManager(QObject *parent)
     : QObject(parent), m_isFetchingCatalog(false)
@@ -141,6 +142,10 @@ QString BibleManager::mapCategoryName(const QString &typeSuffix)
 {
     QString suf = typeSuffix.toLower().trimmed();
 
+    if (typeSuffix.contains("LDS", Qt::CaseInsensitive)) {
+            return "Maps";
+    }
+
     if (suf.contains("commentar") || suf.contains(".commentaries") || suf.endsWith("-c")) return "Commentaries";
     if (suf.contains("dict") || suf.contains(".dictionary")) return "Dictionaries";
     if (suf.contains("devotion") || suf.contains(".devotions")) return "Devotions";
@@ -222,6 +227,20 @@ QVariantList BibleManager::getInstalledModules()
         m.language = language;
         m.groupTitle = "Installed Modules";
         m.isInstalled = true;
+
+        // Custom override for LDS map modules
+        if (m.name.startsWith("LDS", Qt::CaseInsensitive)) {
+            m.category = "Maps";
+
+            // Set clean, user-friendly display titles based on language
+            if (m.language.toLower() == "sv" || m.name.compare("LDS-sv", Qt::CaseInsensitive) == 0) {
+                m.description = "Bibliska kartor och fotografier";
+            } else if (m.language.toLower() == "en" || m.name.compare("LDS-en", Qt::CaseInsensitive) == 0) {
+                m.description = "Bible Maps and Photographs";
+            } else {
+                m.description = QString("Bible Maps (%1)").arg(m.language.toUpper());
+            }
+        }
 
         list.append(QVariant::fromValue(m));
     }
@@ -717,11 +736,11 @@ QVariantMap BibleManager::getVerseByOffset(const QString &moduleName, int offset
         {"Luk", 490},
         {"Joh", 500}, {"John", 500}, {"Jhn", 500},
         {"Apg", 510}, {"Acts", 510}, {"Act", 510}, // Apg / Acts -> 510
-        {"Rom", 520},
+        {"Rom", 520}, {"Ro", 520}, {"Room", 520}, {"Romans", 520},
         {"1Kor", 530}, {"1 Kor", 530}, {"1Cor", 530}, {"1Co", 530},
         {"2Kor", 540}, {"2 Kor", 540}, {"2Cor", 540}, {"2Co", 540},
         {"Gal", 550},
-        {"Ef", 560},  {"Eph", 560},
+        {"Eph", 560}, {"Ef", 560}, {"Efes", 560}, {"Ephes", 560}, {"Ephesians", 560},
         {"Fil", 570}, {"Phil", 570}, {"Php", 570},
         {"Kol", 580}, {"Col", 580},
         {"1Tess", 590}, {"1 Tess", 590}, {"1Ths", 590}, {"1Th", 590},
@@ -952,6 +971,164 @@ void BibleManager::onDownloadFinished(QNetworkReply *reply)
     }
 
     reply->deleteLater();
+}
+
+QVariantList BibleManager::getInstalledMaps()
+{
+    QVariantList list;
+
+    QDirIterator it(m_modulesPath, QStringList() << "*LDS*.SQLite3" << "*LDS*.sqlite3",
+                     QDir::Files, QDirIterator::Subdirectories);
+
+    while (it.hasNext()) {
+        it.next();
+        QFileInfo fileInfo = it.fileInfo();
+
+        QString modName = fileInfo.completeBaseName();
+
+        QSqlDatabase db = getModuleDatabase(modName);
+        QString description = "Bibliska kartor och fotografier";
+
+        if (db.isOpen()) {
+            QSqlQuery q(db);
+            if (q.exec("SELECT value FROM details WHERE name = 'description' LIMIT 1") && q.next()) {
+                QString val = q.value(0).toString();
+                if (!val.isEmpty()) {
+                    description = val;
+                }
+            }
+        }
+
+        // Sätt en tydlig beskrivning om det är standardnamn
+        if (modName.compare("LDS-sv", Qt::CaseInsensitive) == 0) {
+            description = "Bibliska kartor och fotografier";
+        } else if (modName.compare("LDS-en", Qt::CaseInsensitive) == 0) {
+            description = "Bible Maps and Photographs";
+        }
+
+        QVariantMap map;
+        map["moduleName"] = modName;
+        map["title"] = description;
+        map["language"] = modName.mid(4, 2).toLower(); // T.ex. "sv", "en", "fi"
+        list.append(map);
+    }
+
+    return list;
+}
+
+QVariantList BibleManager::getMapTopics(const QString &moduleName)
+{
+    QVariantList topics;
+    if (moduleName.isEmpty()) return topics;
+
+    QSqlDatabase db = getModuleDatabase(moduleName);
+    if (!db.isOpen()) return topics;
+
+    QSqlQuery q(db);
+    // Standard MyBible dictionary table query
+    if (q.exec("SELECT topic FROM dictionary ORDER BY topic ASC")) {
+        while (q.next()) {
+            topics.append(q.value(0).toString());
+        }
+    }
+    return topics;
+}
+
+#include <QDir>
+#include <QFile>
+#include <QStandardPaths>
+#include <QRegularExpression>
+
+QString BibleManager::getMapDefinition(const QString &moduleName, const QString &topic)
+{
+    if (moduleName.isEmpty() || topic.isEmpty()) return QString();
+
+    QSqlDatabase db = getModuleDatabase(moduleName);
+    if (!db.isOpen()) return QString();
+
+    QSqlQuery q(db);
+    q.prepare("SELECT definition FROM dictionary WHERE topic = :topic LIMIT 1");
+    q.bindValue(":topic", topic);
+
+    if (q.exec() && q.next()) {
+        QString html = q.value(0).toString();
+
+        // 1. Skapa cache-mapp för bilder
+        QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/map_images";
+        QDir().mkpath(cacheDir);
+
+        // 2. Matcha <img ... src="data:image/..." ... >
+        static QRegularExpression regExp("src=\\\"data:image\\/(png|jpg|jpeg);base64,([^\"]+)\\\"");
+        QRegularExpressionMatchIterator it = regExp.globalMatch(html);
+
+        int imgIndex = 0;
+        while (it.hasNext()) {
+            QRegularExpressionMatch match = it.next();
+            QString format = match.captured(1);
+            QString base64Data = match.captured(2);
+
+            QByteArray imgData = QByteArray::fromBase64(base64Data.toUtf8());
+
+            QString fileName = QString("%1_%2_%3.%4")
+                               .arg(moduleName)
+                               .arg(topic)
+                               .arg(imgIndex++)
+                               .arg(format);
+
+            fileName.replace(QRegularExpression("[^a-zA-Z0-9_\\.]"), "_");
+            QString filePath = cacheDir + "/" + fileName;
+
+            QFile file(filePath);
+            if (file.open(QIODevice::WriteOnly)) {
+                file.write(imgData);
+                file.close();
+            }
+
+            QString fileUrl = "file://" + filePath;
+
+            // Tvinga bildens bredd i HTML-taggen till 100% av Label-komponentens bredd
+            html.replace(match.captured(0), QString("src=\"%1\" width=\"100%\"").arg(fileUrl));
+        }
+
+        return html;
+    }
+
+    return QString();
+}
+
+QString BibleManager::getCoverVerseText(const QString &moduleName, int bookNumber, int chapter, int verse)
+{
+    if (moduleName.isEmpty()) return QString();
+
+    QSqlDatabase db = getModuleDatabase(moduleName);
+    if (!db.isOpen()) return QString();
+
+    QSqlQuery q(db);
+
+    // 1. First attempt: Query using exact book_number
+    q.prepare("SELECT text FROM verses WHERE book_number = :book AND chapter = :chap AND verse = :v LIMIT 1");
+    q.bindValue(":book", bookNumber);
+    q.bindValue(":chap", chapter);
+    q.bindValue(":v", verse);
+
+    QString resultText = "";
+
+    if (q.exec() && q.next()) {
+        resultText = q.value(0).toString();
+    } else {
+        // 2. Fallback: If exact book_number missed due to non-standard indexing, log debug info
+        qDebug() << "[Cover Debug] Failed lookup for book:" << bookNumber << "chap:" << chapter << "verse:" << verse;
+    }
+
+    if (resultText.isEmpty()) {
+        return QString();
+    }
+
+    // 3. Clean up raw HTML tags / XML formatting so QML Label doesn't break
+    resultText.remove(QRegularExpression("<[^>]*>")); // Strip HTML tags
+    resultText = resultText.trimmed();
+
+    return resultText;
 }
 
 void BibleManager::refreshModules()
