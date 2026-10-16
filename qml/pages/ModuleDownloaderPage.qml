@@ -109,7 +109,9 @@ Page {
                 width: parent.width
                 placeholderText: qsTr("Search module, language...")
 
-                onTextChanged: {
+                EnterKey.enabled: text.length >= 3
+                EnterKey.iconSource: "image://theme/icon-m-search"
+                EnterKey.onClicked: {
                     page.filterText = text
                     page.refreshModel()
                 }
