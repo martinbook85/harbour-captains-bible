@@ -113,31 +113,45 @@ Page {
             }
 
             // Text- och bildområde
-            Label {
-                x: Theme.horizontalPageMargin
-                width: parent.width - (2 * Theme.horizontalPageMargin)
-                color: Theme.primaryColor
-                font.pixelSize: Theme.fontSizeMedium
-                wrapMode: Text.Wrap
-                textFormat: Text.RichText
+            // Text- och bildområde
+                        Label {
+                            id: mapLabel
+                            x: Theme.horizontalPageMargin
+                            width: parent.width - (2 * Theme.horizontalPageMargin)
+                            color: Theme.primaryColor
+                            font.pixelSize: Theme.fontSizeMedium
+                            wrapMode: Text.Wrap
+                            textFormat: Text.RichText
 
-                text: {
-                    if (!mapPage.mapDefinitionHtml) {
-                        return mapPage.currentMapModule.length > 0
-                               ? qsTr("Select a map entry above.")
-                               : qsTr("Pull down to select a map module.")
-                    }
-                    var css = "<style>" +
-                              "img { max-width: 100%; height: auto; display: block; margin: 12px 0; }" +
-                              "a { color: " + Theme.highlightColor + "; text-decoration: underline; }" +
-                              "</style>"
-                    return css + mapPage.mapDefinitionHtml
-                }
+                            text: {
+                                if (!mapPage.mapDefinitionHtml) {
+                                    return mapPage.currentMapModule.length > 0
+                                           ? qsTr("Select a map entry above.")
+                                           : qsTr("Pull down to select a map module.")
+                                }
 
-                onLinkActivated: {
-                    mapPage.handleLinkNavigation(link)
-                }
-            }
+                                // Calculate screen-friendly target width in pixels
+                                var targetWidth = Math.round(mapLabel.width)
+                                var html = mapPage.mapDefinitionHtml
+
+                                // Inject explicit width attributes into <img> tags
+                                // so Qt's RichText parser scales images to fit the screen
+                                html = html.replace(/<img\b([^>]*)>/gi, function(match, group) {
+                                    var clean = group.replace(/\s*(width|height)=["'][^"']*["']/gi, "")
+                                    return "<img width=\"" + targetWidth + "\" " + clean + ">"
+                                })
+
+                                var css = "<style>" +
+                                          "a { color: " + Theme.highlightColor + "; text-decoration: underline; }" +
+                                          "</style>"
+
+                                return css + html
+                            }
+
+                            onLinkActivated: {
+                                mapPage.handleLinkNavigation(link)
+                            }
+                        }
         }
     }
 

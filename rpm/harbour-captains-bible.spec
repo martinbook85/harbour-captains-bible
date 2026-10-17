@@ -1,7 +1,7 @@
 Name:       harbour-captains-bible
 Summary:    Captain's Bible
 Version:    0.2
-Release:    3
+Release:    4
 License:    LICENSE
 URL:        http://example.org/
 Source0:    %{name}-%{version}.tar.bz2
@@ -40,6 +40,9 @@ desktop-file-install --delete-original \
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
+* Sat Oct 17 2026 Your Name <martin@fambook.nu> 0.2-4
+- Fixed image scaling issue in MapPage.qml by injecting dynamic width attributes
+
 * Sat Oct 17 2026 Your Name <martin@fambook.nu> 0.2-3
 - Fixed VOTD book mapping for Ephesians (Efes) and Romans on Cover page
 - Started work on Bible Maps but it is not yet fully functional
