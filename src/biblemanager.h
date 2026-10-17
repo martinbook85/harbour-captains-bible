@@ -51,20 +51,22 @@ public:
     Q_INVOKABLE QVariantList getInstalledBibles();
     Q_INVOKABLE QVariantList getInstalledCommentaries();
     Q_INVOKABLE QVariantList getAvailableModules(const QString &languageFilter = QString());
-
+    Q_INVOKABLE QVariantList getInstalledMaps();
     Q_INVOKABLE QVariantList getBibleBooks(const QString &moduleName);
     Q_INVOKABLE int getChapterCount(const QString &moduleName, const QString &bookId);
     Q_INVOKABLE int getVerseCount(const QString &moduleName, const QString &bookId, int chapter);
     Q_INVOKABLE QVariantList getChapterVerses(const QString &moduleName, const QString &bookId, int chapter);
     Q_INVOKABLE QString renderChapterText(const QString &moduleName, const QString &bookId, int chapter);
     Q_INVOKABLE QString renderCommentaryText(const QString &moduleName, const QString &bookId, int chapter);
-
+    Q_INVOKABLE QVariantList getMapTopics(const QString &moduleName);
+    Q_INVOKABLE QString getMapDefinition(const QString &moduleName, const QString &topic);
     Q_INVOKABLE void fetchRemoteCatalog();
     Q_INVOKABLE void downloadModule(const QString &moduleName);
     Q_INVOKABLE void deleteModule(const QString &moduleName);
     Q_INVOKABLE void refreshModules();
     Q_INVOKABLE bool isModuleDownloading(const QString &moduleName) const;
     Q_INVOKABLE QVariantMap getVerseByOffset(const QString &moduleName, int offset);
+    Q_INVOKABLE QString getCoverVerseText(const QString &moduleName, int bookNumber, int chapter, int verse);
 
 signals:
     void catalogUpdated();

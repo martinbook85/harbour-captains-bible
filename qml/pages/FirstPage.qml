@@ -292,6 +292,11 @@ Page {
                 }
 
                 MenuItem {
+                        text: qsTr("Bible Maps")
+                        onClicked: pageStack.push(Qt.resolvedUrl("MapPage.qml"))
+                    }
+
+                MenuItem {
                     text: qsTr("Settings")
                     onClicked: pageStack.push(Qt.resolvedUrl("SettingsPage.qml"))
                 }

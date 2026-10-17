@@ -31,7 +31,12 @@ Page {
             for (var i = 0; i < allModules.length; i++) {
                 var item = allModules[i]
 
-                if (!item || item.category !== selectedCategory) {
+                if (!item || !item.category) {
+                    continue
+                }
+
+                // Match category (case-insensitive check for resilience)
+                if (item.category.toLowerCase() !== page.selectedCategory.toLowerCase()) {
                     continue
                 }
 
@@ -125,10 +130,11 @@ Page {
                     MenuItem { text: qsTr("Commentaries") }
                     MenuItem { text: qsTr("Dictionaries") }
                     MenuItem { text: qsTr("Devotions") }
+                    MenuItem { text: qsTr("Maps") }
                 }
 
                 onCurrentIndexChanged: {
-                    var categories = ["Bibles", "Commentaries", "Dictionaries", "Devotions"]
+                    var categories = ["Bibles", "Commentaries", "Dictionaries", "Devotions", "Maps"]
                     page.selectedCategory = categories[currentIndex]
                     page.refreshModel()
                 }
@@ -171,11 +177,19 @@ Page {
 
                                     property var itemData: modelData
                                     property bool itemExpanded: false
+
+                                    // Säkrad mot null-objekt
                                     property bool isDownloadingThis: {
                                         var dummy = page.activeDownloadsTick
-                                        return itemData && itemData.name && bibleManager.isModuleDownloading(itemData.name)
+                                        return (itemData && typeof itemData === "object" && itemData.name)
+                                                ? bibleManager.isModuleDownloading(itemData.name)
+                                                : false
                                     }
-                                    property bool isInstalledThis: itemData ? itemData.isInstalled : false
+
+                                    // Säkrad rad 163
+                                    property bool isInstalledThis: (itemData && typeof itemData === "object" && typeof itemData.isInstalled !== "undefined")
+                                                                   ? itemData.isInstalled
+                                                                   : false
 
                                     RemorseItem { id: remorse }
 
@@ -190,8 +204,11 @@ Page {
                                             text: qsTr("Remove from local storage")
                                             onClicked: {
                                                 if (moduleItem.itemData && moduleItem.itemData.name) {
-                                                    remorse.execute(moduleItem, qsTr("Deleting %1").arg(moduleItem.itemData.name), function() {
-                                                        bibleManager.deleteModule(moduleItem.itemData.name)
+                                                    var modName = moduleItem.itemData.name
+                                                    remorse.execute(moduleItem, qsTr("Deleting %1").arg(modName), function() {
+                                                        if (typeof bibleManager !== "undefined") {
+                                                            bibleManager.deleteModule(modName)
+                                                        }
                                                     })
                                                 }
                                             }
@@ -211,7 +228,7 @@ Page {
                                             y: moduleItem.itemExpanded ? Theme.paddingMedium : 0
 
                                             Label {
-                                                text: moduleItem.itemData && moduleItem.itemData.description ? moduleItem.itemData.description : ""
+                                                text: (moduleItem.itemData && moduleItem.itemData.description) ? moduleItem.itemData.description : ""
                                                 color: moduleItem.highlighted ? Theme.highlightColor : Theme.primaryColor
                                                 font.pixelSize: Theme.fontSizeMedium
                                                 anchors.left: parent.left
@@ -221,7 +238,7 @@ Page {
                                             }
 
                                             Label {
-                                                text: moduleItem.itemData ? (moduleItem.itemData.name + (moduleItem.itemData.language ? " (" + moduleItem.itemData.language + ")" : "")) : ""
+                                                text: moduleItem.itemData ? ((moduleItem.itemData.name || "") + (moduleItem.itemData.language ? " (" + moduleItem.itemData.language + ")" : "")) : ""
                                                 color: moduleItem.highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor
                                                 font.pixelSize: Theme.fontSizeExtraSmall
                                             }
@@ -237,7 +254,7 @@ Page {
                                                 }
 
                                                 Label {
-                                                    visible: moduleItem.itemData && moduleItem.itemData.date && moduleItem.itemData.date.length > 0
+                                                    visible: !!(moduleItem.itemData && moduleItem.itemData.date && moduleItem.itemData.date.length > 0)
                                                     text: qsTr("Details: ") + (moduleItem.itemData ? moduleItem.itemData.date : "")
                                                     color: Theme.secondaryColor
                                                     font.pixelSize: Theme.fontSizeExtraSmall

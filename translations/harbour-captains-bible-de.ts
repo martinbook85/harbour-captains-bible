@@ -127,6 +127,45 @@
         <source>Bookmark verse</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Bible Maps</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>MapPage</name>
+    <message>
+        <source>Bible Maps</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select Map Module</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Pull down to select a map module.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Map / Entry</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select a map entry above.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No map topics found in this module.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Back to previous</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Back to main page</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ModuleDownloaderPage</name>
@@ -184,6 +223,10 @@
     </message>
     <message>
         <source>Details: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Maps</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

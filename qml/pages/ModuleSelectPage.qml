@@ -9,6 +9,10 @@ Page {
     property string currentModule: ""
     property string pageTitle: qsTr("Select Translation")
 
+    // DESSA TVÅ RADER LÖSER "Cannot assign to non-existent property"-VARNINGARNA:
+    property string selectedCategory: "Bibles"
+    property int categoryType: 0 // 0 = Bible, 1 = Commentary, 2 = Maps
+
     signal moduleSelected(string moduleName)
 
     // Helper to group flat biblesList into array of { language: "Svenska", modules: [...] }
