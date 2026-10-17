@@ -1,7 +1,7 @@
 Name:       harbour-captains-bible
 Summary:    Captain's Bible
 Version:    0.2
-Release:    2
+Release:    3
 License:    LICENSE
 URL:        http://example.org/
 Source0:    %{name}-%{version}.tar.bz2
@@ -40,9 +40,11 @@ desktop-file-install --delete-original \
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
-* Sat Oct 17 2026 Your Name <martin@fambook.nu> 0.2-2
+* Sat Oct 17 2026 Your Name <martin@fambook.nu> 0.2-3
 - Fixed VOTD book mapping for Ephesians (Efes) and Romans on Cover page
 - Started work on Bible Maps but it is not yet fully functional
+- Fixed verse text rendering line breaks for MyBible modules
+- Updated SearchField to filter on EnterKey in ModuleDownloaderPage
 
 * Fri Oct 16 2026 Your Name <martin@fambook.nu> 0.2-1
 - Added language dividers with custom boxes in ModuleSelectPage

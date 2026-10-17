@@ -394,7 +394,7 @@ QVariantList BibleManager::getChapterVerses(const QString &moduleName, const QSt
         if (rawText.trimmed().isEmpty()) continue;
 
         QStringList formattedFootnotes;
-        QString displayText = rawText;
+        QString displayText = rawText.trimmed();
 
         // 1. Process <f>...</f> and <n>...</n> tags
         QRegExp fTagRegex("<(f|n)>(.*?)</\\1>");
@@ -464,13 +464,20 @@ QVariantList BibleManager::getChapterVerses(const QString &moduleName, const QSt
             }
         }
 
-        // 4. Format verse text for display (keep inline markers intact in main text)
+        // 4. Format verse text for display
+
+        // Remove leading <pb/> tags so verse text isn't pushed below the verse number
+        while (displayText.startsWith("<pb/>")) {
+            displayText.remove(0, 5);
+            displayText = displayText.trimmed();
+        }
+
         displayText.replace(QRegExp("</?(f|n|r|p)>"), " ");
         displayText.remove(QRegExp("<S>[^<]*</S>"));
         displayText.remove(QRegExp("<m>[^<]*</m>"));
         displayText.replace("<J>", "<font color='#d62828'>").replace("</J>", "</font>");
         displayText.replace("<pb/>", "<br/><br/>").replace("<br/>", "<br/>");
-        displayText.replace("<t>", "<div style='margin-left: 15px;'>").replace("</t>", "</div>");
+        displayText.replace("<t>", "<span style='margin-left: 15px;'>").replace("</t>", "</span>");
         displayText.replace("&nbsp;", " ");
 
         QString combinedFootnote = formattedFootnotes.join("<br/>");
@@ -500,11 +507,11 @@ QString BibleManager::renderChapterText(const QString &moduleName, const QString
         QString text = vm["text"].toString();
         bool hasFootnote = vm["hasFootnote"].toBool();
 
-        htmlResult.append(QString("<p style='margin-bottom: 8px;'><b>%1</b> %2").arg(verse).arg(text));
+        htmlResult.append(QString("<div style='margin-bottom: 8px;'><b>%1</b> %2").arg(verse).arg(text));
         if (hasFootnote) {
             htmlResult.append(" <b>*</b>");
         }
-        htmlResult.append("</p>");
+        htmlResult.append("</div>");
     }
 
     return htmlResult;
@@ -793,6 +800,7 @@ QVariantMap BibleManager::getVerseByOffset(const QString &moduleName, int offset
             QString shortName = qBook.value(1).toString().trimmed();
             QString fullName = qBook.value(2).toString().trimmed();
             bookDisplay = !shortName.isEmpty() ? shortName : (!fullName.isEmpty() ? fullName : rawBookId);
+
         }
      }
 
@@ -808,6 +816,8 @@ QVariantMap BibleManager::getVerseByOffset(const QString &moduleName, int offset
 
         if (q.exec() && q.next()) {
             text = q.value(0).toString();
+
+            qDebug() << "[BibleManager RAW VERSE]" << text;
         }
     }
 
