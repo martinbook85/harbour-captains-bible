@@ -1,7 +1,7 @@
 Name:       harbour-captains-bible
 Summary:    Captain's Bible
 Version:    0.2
-Release:    4
+Release:    5
 License:    LICENSE
 URL:        http://example.org/
 Source0:    %{name}-%{version}.tar.bz2
@@ -40,6 +40,10 @@ desktop-file-install --delete-original \
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
+* Sat Oct 17 2026 Your Name <martin@fambook.nu> 0.2-5
+- Fixes to Bible Maps, still only Swedish and English are stable
+- Map zoom works in the Swedish module, best way for larger image in other modules is landscape mode
+
 * Sat Oct 17 2026 Your Name <martin@fambook.nu> 0.2-4
 - Fixed image scaling issue in MapPage.qml by injecting dynamic width attributes
 

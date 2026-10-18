@@ -1,15 +1,29 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
+import Nemo.Configuration 1.0
 
 Page {
     id: mapPage
     allowedOrientations: Orientation.All
 
-    property string currentMapModule: ""
+    property string currentMapModule: lastMapModule.value
     property string currentTopic: ""
     property var topicsList: []
     property string mapDefinitionHtml: ""
     property var history: []
+
+    // --- Persistent Storage (Module Selection Only) ---
+    ConfigurationValue {
+        id: lastMapModule
+        key: "/apps/harbour-captains-bible/lastMapModule"
+        defaultValue: ""
+    }
+
+    Component.onCompleted: {
+        if (currentMapModule.length > 0) {
+            loadTopics()
+        }
+    }
 
     SilicaFlickable {
         id: mapFlickable
@@ -30,6 +44,7 @@ Page {
 
                     page.moduleSelected.connect(function(moduleName) {
                         mapPage.currentMapModule = moduleName
+                        lastMapModule.value = moduleName
                         mapPage.history = []
                         mapPage.loadTopics()
                     })
@@ -78,10 +93,9 @@ Page {
             width: parent.width
             spacing: Theme.paddingMedium
 
+            // Clean Header: Always displays static "Bible Maps" title
             PageHeader {
-                title: mapPage.currentMapModule.length > 0
-                       ? mapPage.currentMapModule
-                       : qsTr("Bible Maps")
+                title: qsTr("Bible Maps")
             }
 
             ComboBox {
@@ -112,46 +126,52 @@ Page {
                 }
             }
 
-            // Text- och bildområde
-            // Text- och bildområde
-                        Label {
-                            id: mapLabel
-                            x: Theme.horizontalPageMargin
-                            width: parent.width - (2 * Theme.horizontalPageMargin)
-                            color: Theme.primaryColor
-                            font.pixelSize: Theme.fontSizeMedium
-                            wrapMode: Text.Wrap
-                            textFormat: Text.RichText
+            // Text and image rendering area
+            Label {
+                id: mapLabel
+                x: Theme.horizontalPageMargin
+                width: parent.width - (2 * Theme.horizontalPageMargin)
+                color: Theme.primaryColor
+                font.pixelSize: Theme.fontSizeMedium
+                wrapMode: Text.Wrap
+                textFormat: Text.RichText
 
-                            text: {
-                                if (!mapPage.mapDefinitionHtml) {
-                                    return mapPage.currentMapModule.length > 0
-                                           ? qsTr("Select a map entry above.")
-                                           : qsTr("Pull down to select a map module.")
-                                }
+                text: {
+                    if (!mapPage.mapDefinitionHtml) {
+                        return mapPage.currentMapModule.length > 0
+                               ? qsTr("Select a map entry above.")
+                               : qsTr("Pull down to select a map module.")
+                    }
 
-                                // Calculate screen-friendly target width in pixels
-                                var targetWidth = Math.round(mapLabel.width)
-                                var html = mapPage.mapDefinitionHtml
+                    var targetWidth = Math.round(mapLabel.width)
+                    var html = mapPage.mapDefinitionHtml
 
-                                // Inject explicit width attributes into <img> tags
-                                // so Qt's RichText parser scales images to fit the screen
-                                html = html.replace(/<img\b([^>]*)>/gi, function(match, group) {
-                                    var clean = group.replace(/\s*(width|height)=["'][^"']*["']/gi, "")
-                                    return "<img width=\"" + targetWidth + "\" " + clean + ">"
-                                })
+                    // Wrap <img> tags in href links so clicking them opens ImagePage.qml
+                    html = html.replace(/<img\b([^>]*)\bsrc=["']([^"']+)["']([^>]*)>/gi, function(match, prefix, src, suffix) {
+                        var clean = (prefix + suffix).replace(/\s*(width|height)=["'][^"']*["']/gi, "")
+                        return "<a href=\"image:" + src + "\"><img width=\"" + targetWidth + "\" src=\"" + src + "\" " + clean + "></a>"
+                    })
 
-                                var css = "<style>" +
-                                          "a { color: " + Theme.highlightColor + "; text-decoration: underline; }" +
-                                          "</style>"
+                    var css = "<style>" +
+                              "a { color: " + Theme.highlightColor + "; text-decoration: underline; }" +
+                              "</style>"
 
-                                return css + html
-                            }
+                    return css + html
+                }
 
-                            onLinkActivated: {
-                                mapPage.handleLinkNavigation(link)
-                            }
-                        }
+                onLinkActivated: {
+                    console.log("[MapPage IMAGE LINK]:", link)
+                    if (link.indexOf("image:") === 0) {
+                        var imgSrc = link.substring(6)
+                        pageStack.push(Qt.resolvedUrl("ImagePage.qml"), {
+                            "imageSource": imgSrc,
+                            "imageTitle": mapPage.currentTopic
+                        })
+                    } else {
+                        mapPage.handleLinkNavigation(link)
+                    }
+                }
+            }
         }
     }
 
@@ -161,6 +181,7 @@ Page {
         if (typeof bibleManager !== "undefined" && currentMapModule.length > 0) {
             topicsList = bibleManager.getMapTopics(currentMapModule)
             if (topicsList.length > 0) {
+                // Always land on the first/main entry when re-entering or switching modules
                 currentTopic = topicsList[0]
                 topicComboBox.currentIndex = 0
                 loadDefinition()

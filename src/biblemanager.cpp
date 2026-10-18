@@ -17,6 +17,7 @@
 #include <QJsonArray>
 #include <QMap>
 #include <QSqlDatabase>
+#include <QImage>
 
 BibleManager::BibleManager(QObject *parent)
     : QObject(parent), m_isFetchingCatalog(false)
@@ -743,7 +744,7 @@ QVariantMap BibleManager::getVerseByOffset(const QString &moduleName, int offset
         {"Luk", 490},
         {"Joh", 500}, {"John", 500}, {"Jhn", 500},
         {"Apg", 510}, {"Acts", 510}, {"Act", 510}, // Apg / Acts -> 510
-        {"Rom", 520}, {"Ro", 520}, {"Room", 520}, {"Romans", 520},
+        {"Rom", 520}, {"Ro", 520}, {"Room", 520}, {"Romans", 520}, {"Roms", 520},
         {"1Kor", 530}, {"1 Kor", 530}, {"1Cor", 530}, {"1Co", 530},
         {"2Kor", 540}, {"2 Kor", 540}, {"2Cor", 540}, {"2Co", 540},
         {"Gal", 550},
@@ -1044,11 +1045,6 @@ QVariantList BibleManager::getMapTopics(const QString &moduleName)
     return topics;
 }
 
-#include <QDir>
-#include <QFile>
-#include <QStandardPaths>
-#include <QRegularExpression>
-
 QString BibleManager::getMapDefinition(const QString &moduleName, const QString &topic)
 {
     if (moduleName.isEmpty() || topic.isEmpty()) return QString();
@@ -1077,8 +1073,7 @@ QString BibleManager::getMapDefinition(const QString &moduleName, const QString 
             QString format = match.captured(1);
             QString base64Data = match.captured(2);
 
-            QByteArray imgData = QByteArray::fromBase64(base64Data.toUtf8());
-
+            // Generera ett unikt och säkert filnamn
             QString fileName = QString("%1_%2_%3.%4")
                                .arg(moduleName)
                                .arg(topic)
@@ -1088,10 +1083,15 @@ QString BibleManager::getMapDefinition(const QString &moduleName, const QString 
             fileName.replace(QRegularExpression("[^a-zA-Z0-9_\\.]"), "_");
             QString filePath = cacheDir + "/" + fileName;
 
-            QFile file(filePath);
-            if (file.open(QIODevice::WriteOnly)) {
-                file.write(imgData);
-                file.close();
+            // --- OPTIMERING: CACHE CHECK ---
+            // Om bilden redan finns på disken slipper vi dekoda Base64 och skriva till disk!
+            if (!QFile::exists(filePath)) {
+                QByteArray imgData = QByteArray::fromBase64(base64Data.toUtf8());
+                QFile file(filePath);
+                if (file.open(QIODevice::WriteOnly)) {
+                    file.write(imgData);
+                    file.close();
+                }
             }
 
             QString fileUrl = "file://" + filePath;

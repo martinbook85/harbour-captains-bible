@@ -41,7 +41,7 @@ TRANSLATIONS += translations/harbour-captains-bible-de.ts
 DISTFILES += \
     qml/pages/AboutPage.qml \
     qml/pages/BookmarksPage.qml \
-    qml/pages/ImageZoomPage.qml \
+    qml/pages/ImagePage.qml \
     qml/pages/MapPage.qml \
     qml/pages/SettingsPage.qml
 

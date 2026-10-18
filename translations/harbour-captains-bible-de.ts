@@ -133,6 +133,13 @@
     </message>
 </context>
 <context>
+    <name>ImagePage</name>
+    <message>
+        <source>Map View</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>MapPage</name>
     <message>
         <source>Bible Maps</source>
