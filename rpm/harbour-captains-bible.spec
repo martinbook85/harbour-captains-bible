@@ -1,7 +1,7 @@
 Name:       harbour-captains-bible
 Summary:    Captain's Bible
 Version:    0.2
-Release:    5
+Release:    6
 License:    LICENSE
 URL:        http://example.org/
 Source0:    %{name}-%{version}.tar.bz2
@@ -40,6 +40,11 @@ desktop-file-install --delete-original \
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
+* Sun Oct 18 2026 Your Name <martin@fambook.nu> 0.2-6
+- Commentary view updated with verse numbers
+- Module selection in commentary view shows if the commentary has comments on selected chapter
+- Search function added with ability to search current or other Bible modules and different parts of Holy Scripture
+
 * Sat Oct 17 2026 Your Name <martin@fambook.nu> 0.2-5
 - Fixes to Bible Maps, still only Swedish and English are stable
 - Map zoom works in the Swedish module, best way for larger image in other modules is landscape mode

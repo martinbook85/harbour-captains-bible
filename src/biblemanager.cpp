@@ -525,19 +525,67 @@ QString BibleManager::renderCommentaryText(const QString &moduleName, const QStr
 
     int bookNum = getMyBibleBookNumber(bookId);
     QSqlQuery q(db);
-    q.prepare("SELECT text FROM commentaries WHERE book_number = :book AND chapter_number_from = :chapter");
+
+    // Fetch verse range columns along with the commentary text
+    // Ordering by verse keeps the commentary structured chronologically through the chapter
+    q.prepare("SELECT verse_number_from, verse_number_to, text FROM commentaries "
+              "WHERE book_number = :book AND chapter_number_from = :chapter "
+              "ORDER BY verse_number_from ASC");
     q.bindValue(":book", bookNum);
     q.bindValue(":chapter", chapter);
 
-    if (!q.exec()) return QString();
+    if (!q.exec()) {
+        // Fallback query in case the table uses 'verse_from' / 'verse_to' schema
+        q.prepare("SELECT verse_from, verse_to, text FROM commentaries "
+                  "WHERE book_number = :book AND chapter_number_from = :chapter "
+                  "ORDER BY verse_from ASC");
+        q.bindValue(":book", bookNum);
+        q.bindValue(":chapter", chapter);
+
+        if (!q.exec()) return QString();
+    }
 
     QString resultHtml;
     while (q.next()) {
-        resultHtml.append(q.value(0).toString());
+        int vFrom = q.value(0).toInt();
+        int vTo = q.value(1).toInt();
+        QString commentText = q.value(2).toString();
+
+        // 1. Build a styled verse badge
+        QString verseBadge;
+        if (vFrom == 0) {
+            verseBadge = "<b style='color: #008080;'>[Chapter Overview]</b><br/>";
+        } else if (vFrom == vTo || vTo == 0) {
+            verseBadge = QString("<b style='color: #008080;'>[Verse %1]</b><br/>").arg(vFrom);
+        } else {
+            verseBadge = QString("<b style='color: #008080;'>[Verses %1–%2]</b><br/>").arg(vFrom).arg(vTo);
+        }
+
+        // 2. Append badge + comment text
+        resultHtml.append(verseBadge);
+        resultHtml.append(commentText);
         resultHtml.append("<br/><hr/><br/>");
     }
 
     return resultHtml;
+}
+
+int BibleManager::getCommentaryCount(const QString &moduleName, const QString &bookId, int chapter)
+{
+    QSqlDatabase db = getCommentaryDatabase(moduleName);
+    if (!db.isOpen()) return 0;
+
+    int bookNum = getMyBibleBookNumber(bookId);
+    QSqlQuery q(db);
+    q.prepare("SELECT COUNT(*) FROM commentaries WHERE book_number = :book AND chapter_number_from = :chapter");
+    q.bindValue(":book", bookNum);
+    q.bindValue(":chapter", chapter);
+
+    if (q.exec() && q.next()) {
+        return q.value(0).toInt();
+    }
+
+    return 0;
 }
 
 QVariantList BibleManager::parseCatalog()
@@ -1139,6 +1187,124 @@ QString BibleManager::getCoverVerseText(const QString &moduleName, int bookNumbe
     resultText = resultText.trimmed();
 
     return resultText;
+}
+
+QString BibleManager::getTranslatedBookName(const QString &moduleName, const QString &bookId)
+{
+    if (moduleName.isEmpty() || bookId.isEmpty()) return bookId;
+
+    QSqlDatabase db = getModuleDatabase(moduleName);
+    if (!db.isOpen()) return bookId;
+
+    int bookNum = getMyBibleBookNumber(bookId);
+    QSqlQuery q(db);
+
+    // Try standard MyBible books table schema
+    q.prepare("SELECT long_name, short_name FROM books WHERE book_number = :book");
+    q.bindValue(":book", bookNum);
+
+    if (q.exec() && q.next()) {
+        QString longName = q.value(0).toString().trimmed();
+        QString shortName = q.value(1).toString().trimmed();
+        if (!longName.isEmpty()) return longName;
+        if (!shortName.isEmpty()) return shortName;
+    }
+
+    return bookId;
+}
+
+QVariantList BibleManager::searchBible(const QString &moduleName,
+                                       const QString &searchTerm,
+                                       int scopeIndex,
+                                       const QString &currentBookId,
+                                       bool exactMatch,
+                                       int limit,
+                                       int offset)
+{
+    QVariantList results;
+    QString cleanTerm = searchTerm.trimmed();
+    if (moduleName.isEmpty() || cleanTerm.isEmpty()) return results;
+
+    QSqlDatabase db = getModuleDatabase(moduleName);
+    if (!db.isOpen()) return results;
+
+    // 1. Determine Scope SQL Condition using MyBible 10-based numbering
+    QString scopeCondition;
+    int currentBookNum = getMyBibleBookNumber(currentBookId);
+
+    switch (scopeIndex) {
+        case 0:  scopeCondition = QString("book_number = %1").arg(currentBookNum); break; // Current Book
+        case 1:  scopeCondition = "book_number BETWEEN 10 AND 460"; break;                // Old Testament
+        case 2:  scopeCondition = "book_number BETWEEN 10 AND 50"; break;                 // Pentateuch
+        case 3:  scopeCondition = "book_number BETWEEN 60 AND 190"; break;                // Historic
+        case 4:  scopeCondition = "book_number BETWEEN 220 AND 260"; break;               // Poetic
+        case 5:  scopeCondition = "book_number BETWEEN 290 AND 460"; break;               // Prophets
+        case 6:  scopeCondition = "book_number BETWEEN 470 AND 730"; break;               // New Testament
+        case 7:  scopeCondition = "book_number BETWEEN 470 AND 500"; break;               // Gospels
+        case 8:  scopeCondition = "book_number BETWEEN 520 AND 720"; break;               // Epistles
+        default: scopeCondition = "book_number >= 10"; break;                             // Entire Bible
+    }
+
+    // 2. Determine Match Type SQL Condition
+    QString matchCondition;
+    if (exactMatch) {
+        matchCondition = "(text LIKE :pattern1 OR text LIKE :pattern2 OR text LIKE :pattern3 OR text = :exact)";
+    } else {
+        matchCondition = "text LIKE :pattern";
+    }
+
+    QString sql = QString("SELECT book_number, chapter, verse, text FROM verses "
+                          "WHERE %1 AND %2 "
+                          "ORDER BY book_number ASC, chapter ASC, verse ASC "
+                          "LIMIT %3 OFFSET %4")
+                  .arg(scopeCondition)
+                  .arg(matchCondition)
+                  .arg(limit)
+                  .arg(offset);
+
+    QSqlQuery q(db);
+    q.prepare(sql);
+
+    if (exactMatch) {
+        q.bindValue(":pattern1", cleanTerm + " %");
+        q.bindValue(":pattern2", "% " + cleanTerm + " %");
+        q.bindValue(":pattern3", "% " + cleanTerm);
+        q.bindValue(":exact", cleanTerm);
+    } else {
+        q.bindValue(":pattern", "%" + cleanTerm + "%");
+    }
+
+    if (q.exec()) {
+        while (q.next()) {
+            int bNum = q.value(0).toInt();
+            int chap = q.value(1).toInt();
+            int vNum = q.value(2).toInt();
+            QString rawText = q.value(3).toString();
+
+            // Highlight Search Term
+            QString highlightedText = rawText;
+            QRegularExpression re(QString("(%1)").arg(QRegularExpression::escape(cleanTerm)),
+                                 QRegularExpression::CaseInsensitiveOption);
+
+             highlightedText.replace(re, "<font color='#008080'><b>\\1</b></font>");
+
+            // Use your existing getOSISBookId method here:
+            QString bId = getOSISBookId(bNum);
+            QString localizedBookName = getTranslatedBookName(moduleName, bId);
+
+            QVariantMap item;
+            item["bookNumber"] = bNum;
+            item["bookId"] = bId;
+            item["bookName"] = localizedBookName;
+            item["chapter"] = chap;
+            item["verse"] = vNum;
+            item["snippet"] = highlightedText;
+
+            results.append(item);
+        }
+    }
+
+    return results;
 }
 
 void BibleManager::refreshModules()

@@ -9,7 +9,6 @@ Page {
     property string currentModule: ""
     property string pageTitle: qsTr("Select Translation")
 
-    // DESSA TVÅ RADER LÖSER "Cannot assign to non-existent property"-VARNINGARNA:
     property string selectedCategory: "Bibles"
     property int categoryType: 0 // 0 = Bible, 1 = Commentary, 2 = Maps
 
@@ -97,6 +96,7 @@ Page {
                         delegate: BackgroundItem {
                             id: delegateItem
                             width: parent.width
+                            height: Theme.itemSizeSmall
 
                             property string modName: (typeof modelData === "object" && modelData !== null)
                                                      ? (modelData.moduleName || modelData["moduleName"] || "")
@@ -105,16 +105,55 @@ Page {
                                                       ? (modelData.title || modelData["title"] || modName)
                                                       : modelData
 
+                            // Hämta antal kommentarer om det finns skickat i objektet
+                            property var commentCount: (typeof modelData === "object" && modelData !== null && modelData.commentCount !== undefined)
+                                                       ? modelData.commentCount
+                                                       : null
+
                             property bool isSelected: modName === page.currentModule
 
-                            Label {
-                                x: Theme.horizontalPageMargin
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: parent.width - (2 * Theme.horizontalPageMargin)
-                                text: modTitle
-                                color: isSelected ? Theme.highlightColor : Theme.primaryColor
-                                font.pixelSize: Theme.fontSizeMedium
-                                truncationMode: TruncationMode.Fade
+                            Row {
+                                anchors.fill: parent
+                                anchors.leftMargin: Theme.horizontalPageMargin
+                                anchors.rightMargin: Theme.horizontalPageMargin
+                                spacing: Theme.paddingMedium
+
+                                // Modultitel
+                                Label {
+                                    text: delegateItem.modTitle
+                                    color: delegateItem.isSelected ? Theme.highlightColor : Theme.primaryColor
+                                    font.pixelSize: Theme.fontSizeMedium
+                                    truncationMode: TruncationMode.Fade
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: countRow.visible ? (parent.width - countRow.width - Theme.paddingMedium) : parent.width
+                                }
+
+                                // Indikator för kommentarer (Visas endast för kommentarsmoduler)
+                                Row {
+                                    id: countRow
+                                    spacing: Theme.paddingSmall
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    visible: delegateItem.commentCount !== null
+
+                                    Icon {
+                                        source: "image://theme/icon-s-chat"
+                                        width: Theme.iconSizeSmall
+                                        height: Theme.iconSizeSmall
+                                        color: (delegateItem.commentCount > 0)
+                                               ? (delegateItem.isSelected ? Theme.highlightColor : Theme.primaryColor)
+                                               : Theme.secondaryColor
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+
+                                    Label {
+                                        text: delegateItem.commentCount !== null ? delegateItem.commentCount : "0"
+                                        font.pixelSize: Theme.fontSizeSmall
+                                        color: (delegateItem.commentCount > 0)
+                                               ? (delegateItem.isSelected ? Theme.highlightColor : Theme.primaryColor)
+                                               : Theme.secondaryColor
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+                                }
                             }
 
                             onClicked: {

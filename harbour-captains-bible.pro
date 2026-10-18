@@ -43,6 +43,8 @@ DISTFILES += \
     qml/pages/BookmarksPage.qml \
     qml/pages/ImagePage.qml \
     qml/pages/MapPage.qml \
+    qml/pages/SearchPage.qml \
+    qml/pages/SearchResultChapterPage.qml \
     qml/pages/SettingsPage.qml
 
 # -----------------------------------------------------------------------------

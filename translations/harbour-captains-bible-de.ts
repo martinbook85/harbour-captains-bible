@@ -131,6 +131,10 @@
         <source>Bible Maps</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Search</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ImagePage</name>
@@ -245,6 +249,81 @@
     </message>
     <message>
         <source>Other</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>SearchPage</name>
+    <message>
+        <source>Search Bible</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Enter search term...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Search Scope</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Current Book</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Old Testament</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Pentateuch</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Historic</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Poetic</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Prophets</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>New Testament</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Gospels</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Epistles</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Entire Bible</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Exact word match</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Translation</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Results (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Results</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Load more results...</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

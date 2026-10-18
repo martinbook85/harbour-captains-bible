@@ -263,6 +263,17 @@ Page {
                 }
 
                 MenuItem {
+                    text: qsTr("Search")
+                    enabled: page.selectedModule !== ""
+                    onClicked: {
+                        pageStack.push(Qt.resolvedUrl("SearchPage.qml"), {
+                            "currentModule": page.selectedModule,
+                            "currentBookId": page.currentBookId || "Gen"
+                        })
+                    }
+                }
+
+                MenuItem {
                     text: qsTr("Choose passage")
                     enabled: page.selectedModule !== ""
                     onClicked: {

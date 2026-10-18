@@ -67,6 +67,15 @@ public:
     Q_INVOKABLE bool isModuleDownloading(const QString &moduleName) const;
     Q_INVOKABLE QVariantMap getVerseByOffset(const QString &moduleName, int offset);
     Q_INVOKABLE QString getCoverVerseText(const QString &moduleName, int bookNumber, int chapter, int verse);
+    Q_INVOKABLE int getCommentaryCount(const QString &moduleName, const QString &bookId, int chapter);
+    Q_INVOKABLE QVariantList searchBible(const QString &moduleName,
+                                         const QString &searchTerm,
+                                         int scopeIndex,
+                                         const QString &currentBookId,
+                                         bool exactMatch,
+                                         int limit = 100,
+                                         int offset = 0);
+    Q_INVOKABLE QString getTranslatedBookName(const QString &moduleName, const QString &bookId);
 
 signals:
     void catalogUpdated();

@@ -18,13 +18,41 @@ Page {
     }
 
     function loadCommentaries() {
-        commentaryList = bibleManager.getInstalledCommentaries()
-        if (commentaryList && commentaryList.length > 0) {
+        var rawList = bibleManager.getInstalledCommentaries()
+        var enrichedList = []
+
+        if (rawList && rawList.length > 0) {
+            for (var i = 0; i < rawList.length; i++) {
+                var item = rawList[i]
+                var modName = ""
+                var modTitle = ""
+
+                if (typeof item === "object") {
+                    modName = item.moduleName || item["moduleName"] || ""
+                    modTitle = item.title || modName
+                } else {
+                    modName = item
+                    modTitle = item
+                }
+
+                // Query C++ helper for the number of comments in this chapter
+                var count = bibleManager.getCommentaryCount(modName, bookId, chapter)
+
+                enrichedList.push({
+                    "moduleName": modName,
+                    "title": modTitle,
+                    "commentCount": count,
+                    // Format display title with a speech bubble indicator if comments exist
+                    "displayTitle": count > 0
+                                    ? modTitle + "  💬 (" + count + ")"
+                                    : modTitle
+                })
+            }
+
+            commentaryList = enrichedList
+
             if (selectedCommentaryModule === "") {
-                var firstItem = commentaryList[0]
-                selectedCommentaryModule = (typeof firstItem === "object")
-                                           ? (firstItem.moduleName || firstItem["moduleName"] || "")
-                                           : firstItem
+                selectedCommentaryModule = commentaryList[0].moduleName
             }
             loadText()
         }
@@ -35,13 +63,13 @@ Page {
         commentaryHtml = bibleManager.renderCommentaryText(selectedCommentaryModule, bookId, chapter)
     }
 
-    // Hjälpfunktion för att hämta och förkorta namnet på kommentar-modulen
+    // Helper function to fetch and truncate the active commentary module name for header display
     function getShortCommentaryName() {
         if (!selectedCommentaryModule) return ""
 
         var displayName = selectedCommentaryModule
 
-        // Sök igenom commentaryList efter en matchande titel
+        // Search commentaryList for a matching module title
         for (var i = 0; i < commentaryList.length; i++) {
             var item = commentaryList[i]
             if (typeof item === "object" && item.moduleName === selectedCommentaryModule) {
@@ -50,7 +78,7 @@ Page {
             }
         }
 
-        // Trimm texten om den är längre än 18 tecken för snyggare header
+        // Trim text if longer than 18 characters for a cleaner Sailfish PageHeader layout
         if (displayName.length > 18) {
             return displayName.substring(0, 16) + "..."
         }
