@@ -249,6 +249,38 @@ QVariantList BibleManager::getInstalledModules()
     return list;
 }
 
+bool BibleManager::isBibleModule(const QString &moduleName)
+{
+    // 1. Filtrera bort filer som uttryckligen innehåller commentary eller dictionary i namnet
+    QString lowerName = moduleName.toLower();
+    if (lowerName.contains("commentary") || lowerName.contains("dictionary")) {
+        return false;
+    }
+
+    // 2. Öppna databasen med din befintliga getModuleDatabase-metod
+    QSqlDatabase db = getModuleDatabase(moduleName);
+    if (!db.isOpen()) return false;
+
+    // 3. Kontrollera att tabellen 'verses' faktiskt finns
+    QStringList tables = db.tables();
+    if (!tables.contains("verses", Qt::CaseInsensitive)) {
+        return false;
+    }
+
+    // 4. Se till att 'verses'-tabellen faktiskt innehåller bibelverser (tvillingfiler är ofta tomma)
+    QSqlQuery q(db);
+    if (q.exec("SELECT COUNT(*) FROM verses") && q.next()) {
+        int verseCount = q.value(0).toInt();
+        if (verseCount == 0) {
+            return false;
+        }
+    } else {
+        return false;
+    }
+
+    return true;
+}
+
 QVariantList BibleManager::getInstalledBibles()
 {
     QVariantList list;
@@ -256,7 +288,9 @@ QVariantList BibleManager::getInstalledBibles()
 
     for (const QVariant &v : allMods) {
         ModuleInfo m = v.value<ModuleInfo>();
-        if (m.category == "Bibles") {
+
+        // Vi kollar både att kategorin är Bibles OCH att modulen faktiskt innehåller bibeltext
+        if (m.category == "Bibles" && isBibleModule(m.name)) {
             QVariantMap map;
             map["moduleName"] = m.name;
             map["title"] = m.description;

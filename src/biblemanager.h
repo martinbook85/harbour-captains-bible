@@ -95,7 +95,7 @@ private:
     int getMyBibleBookNumber(const QString &bookId);
     QString getOSISBookId(int myBibleBookNumber);
     QVariantList parseCatalog();
-
+    bool isBibleModule(const QString &moduleName);
     QString m_modulesPath;
     QString m_catalogPath;
     bool m_isFetchingCatalog;
