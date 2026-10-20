@@ -86,6 +86,41 @@
     </message>
 </context>
 <context>
+    <name>DictionaryPage</name>
+    <message>
+        <source>Dictionaries</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Dictionary</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select Active Dictionary</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Search all dictionaries (e.g. H7225)...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Get More Dictionaries</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No definition found for &apos;%1&apos; in installed dictionaries.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No dictionary module available.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Download Dictionaries</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>FirstPage</name>
     <message>
         <source>Get more modules</source>
@@ -133,6 +168,14 @@
     </message>
     <message>
         <source>Search</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Verse commentaries</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Dictionary</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -328,6 +371,13 @@
     </message>
 </context>
 <context>
+    <name>SelectCommentaryDialog</name>
+    <message>
+        <source>Select Commentary</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>SelectPage</name>
     <message>
         <source>Select Passage</source>
@@ -350,6 +400,21 @@
     </message>
     <message>
         <source>About</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>VerseCommentaryPage</name>
+    <message>
+        <source>Select Commentary</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Verse Commentaries</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No comment in this commentary for this particular verse.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

@@ -18,6 +18,7 @@
 #include <QMap>
 #include <QSqlDatabase>
 #include <QImage>
+#include <QSqlRecord>
 
 BibleManager::BibleManager(QObject *parent)
     : QObject(parent), m_isFetchingCatalog(false)
@@ -507,9 +508,16 @@ QVariantList BibleManager::getChapterVerses(const QString &moduleName, const QSt
             displayText = displayText.trimmed();
         }
 
+        // Clean out note/cross-reference content tags from main text
+        displayText.replace(QRegExp("<(f|n|r|p)>.*?</\\1>"), " ");
         displayText.replace(QRegExp("</?(f|n|r|p)>"), " ");
-        displayText.remove(QRegExp("<S>[^<]*</S>"));
+
+        // Clean out morph/grammar tags if present (<m>...</m>)
         displayText.remove(QRegExp("<m>[^<]*</m>"));
+
+        // Preserve <S> tag contents! (REMOVED: displayText.remove(QRegExp("<S>[^<]*</S>"));)
+
+        // Styling tags
         displayText.replace("<J>", "<font color='#d62828'>").replace("</J>", "</font>");
         displayText.replace("<pb/>", "<br/><br/>").replace("<br/>", "<br/>");
         displayText.replace("<t>", "<span style='margin-left: 15px;'>").replace("</t>", "</span>");
@@ -1339,6 +1347,494 @@ QVariantList BibleManager::searchBible(const QString &moduleName,
     }
 
     return results;
+}
+
+QVariantList BibleManager::getCommentariesForVerse(const QString &bookId, int chapter, int verse)
+{
+    QVariantList list;
+    if (bookId.isEmpty()) return list;
+
+    int bookNum = getMyBibleBookNumber(bookId);
+    QDir dir(m_modulesPath);
+
+    // Target commentary files with the '-c' naming convention
+    QStringList filters;
+    filters << "*-c.SQLite3" << "*-c.sqlite3"
+            << "*-c.SQLite"  << "*-c.sqlite";
+
+    QFileInfoList files = dir.entryInfoList(filters, QDir::Files, QDir::Name);
+
+    for (const QFileInfo &fileInfo : files) {
+        QString moduleName = fileInfo.completeBaseName();
+
+        QSqlDatabase db = getCommentaryDatabase(moduleName);
+        if (!db.isOpen()) continue;
+
+        QStringList tables = db.tables();
+
+        // Ensure the database contains the 'commentaries' table
+        if (!tables.contains("commentaries", Qt::CaseInsensitive)) {
+            continue;
+        }
+
+        // Query if a commentary note exists for this specific verse or verse range
+        QSqlQuery q(db);
+        q.prepare("SELECT COUNT(*) FROM commentaries "
+                  "WHERE book_number = :book "
+                  "AND ((chapter_number_from < :chap OR (chapter_number_from = :chap AND verse_number_from <= :verse)) "
+                  "AND (chapter_number_to > :chap OR (chapter_number_to = :chap AND verse_number_to >= :verse)))");
+        q.bindValue(":book", bookNum);
+        q.bindValue(":chap", chapter);
+        q.bindValue(":verse", verse);
+
+        int count = 0;
+        if (q.exec() && q.next()) {
+            count = q.value(0).toInt();
+        }
+
+        // Alternate schema check (verse_from / verse_to)
+        if (count == 0) {
+            q.prepare("SELECT COUNT(*) FROM commentaries "
+                      "WHERE book_number = :book "
+                      "AND ((chapter_number_from < :chap OR (chapter_number_from = :chap AND verse_from <= :verse)) "
+                      "AND (chapter_number_to > :chap OR (chapter_number_to = :chap AND verse_to >= :verse)))");
+            q.bindValue(":book", bookNum);
+            q.bindValue(":chap", chapter);
+            q.bindValue(":verse", verse);
+
+            if (q.exec() && q.next()) {
+                count = q.value(0).toInt();
+            }
+        }
+
+        // Retrieve human-readable title and language from details/info table
+        QString title = moduleName;
+        QString language = "en";
+
+        QSqlQuery metaQuery(db);
+        if (metaQuery.exec("SELECT name, value FROM details")) {
+            while (metaQuery.next()) {
+                QString key = metaQuery.value(0).toString().toLower();
+                if (key == "description") title = metaQuery.value(1).toString();
+                else if (key == "language") language = metaQuery.value(1).toString();
+            }
+        } else if (metaQuery.exec("SELECT name, value FROM info")) {
+            while (metaQuery.next()) {
+                QString key = metaQuery.value(0).toString().toLower();
+                if (key == "description") title = metaQuery.value(1).toString();
+                else if (key == "language") language = metaQuery.value(1).toString();
+            }
+        }
+
+        QVariantMap item;
+        item["moduleName"] = moduleName;
+        item["title"] = title;
+        item["language"] = getLanguageDisplayName(language);
+        item["commentCount"] = count; // Shows count in ModuleSelectPage
+
+        list.append(item);
+    }
+
+    return list;
+}
+
+QString BibleManager::getVerseCommentaryText(const QString &commentaryModule,
+                                          const QString &activeBibleModule,
+                                          const QString &bookId,
+                                          int chapter,
+                                          int verse)
+{
+    if (commentaryModule.isEmpty() || bookId.isEmpty()) return QString();
+
+    int bookNum = getMyBibleBookNumber(bookId);
+    QSqlDatabase db = getCommentaryDatabase(commentaryModule);
+    if (!db.isOpen()) return QString();
+
+    QSqlQuery q(db);
+    q.prepare("SELECT chapter_number_from, verse_number_from, chapter_number_to, verse_number_to, text "
+              "FROM commentaries "
+              "WHERE book_number = :book "
+              "AND ((chapter_number_from < :chap OR (chapter_number_from = :chap AND verse_number_from <= :verse)) "
+              "AND (chapter_number_to > :chap OR (chapter_number_to = :chap AND verse_number_to >= :verse))) "
+              "LIMIT 1");
+    q.bindValue(":book", bookNum);
+    q.bindValue(":chap", chapter);
+    q.bindValue(":verse", verse);
+
+    int vFrom = 0;
+    int vTo = 0;
+    QString rawCommentary = "";
+
+    if (q.exec() && q.next()) {
+        vFrom = q.value(1).toInt();
+        vTo = q.value(3).toInt();
+        rawCommentary = q.value(4).toString();
+    } else {
+        // Fallback for verse_from / verse_to column schema
+        q.prepare("SELECT chapter_number_from, verse_from, chapter_number_to, verse_to, text "
+                  "FROM commentaries "
+                  "WHERE book_number = :book "
+                  "AND ((chapter_number_from < :chap OR (chapter_number_from = :chap AND verse_from <= :verse)) "
+                  "AND (chapter_number_to > :chap OR (chapter_number_to = :chap AND verse_to >= :verse))) "
+                  "LIMIT 1");
+        q.bindValue(":book", bookNum);
+        q.bindValue(":chap", chapter);
+        q.bindValue(":verse", verse);
+
+        if (q.exec() && q.next()) {
+            vFrom = q.value(1).toInt();
+            vTo = q.value(3).toInt();
+            rawCommentary = q.value(4).toString();
+        } else {
+            return QString();
+        }
+    }
+
+    // 1. Build range badge
+    QString verseBadge;
+    if (vFrom == 0) {
+        verseBadge = "<b style='color: #008080;'>[Chapter Overview]</b><br/>";
+    } else if (vFrom == vTo || vTo == 0) {
+        verseBadge = QString("<b style='color: #008080;'>[Verse %1]</b><br/>").arg(vFrom);
+    } else {
+        verseBadge = QString("<b style='color: #008080;'>[Verses %1–%2]</b><br/>").arg(vFrom).arg(vTo);
+    }
+
+    // 2. Fetch covered Scripture text from active Bible module
+    QString coveredVerseText = "";
+    if (!activeBibleModule.isEmpty()) {
+        QSqlDatabase bibleDb = getModuleDatabase(activeBibleModule);
+        if (bibleDb.isOpen()) {
+            QSqlQuery bibleQuery(bibleDb);
+            int fetchTo = (vTo > 0) ? vTo : vFrom;
+            bibleQuery.prepare("SELECT verse, text FROM verses "
+                               "WHERE book_number = :book AND chapter = :chap "
+                               "AND verse >= :vFrom AND verse <= :vTo "
+                               "ORDER BY verse ASC");
+            bibleQuery.bindValue(":book", bookNum);
+            bibleQuery.bindValue(":chap", chapter);
+            bibleQuery.bindValue(":vFrom", vFrom);
+            bibleQuery.bindValue(":vTo", fetchTo);
+
+            if (bibleQuery.exec()) {
+                while (bibleQuery.next()) {
+                    int vNum = bibleQuery.value("verse").toInt();
+                    QString text = bibleQuery.value("text").toString();
+                    coveredVerseText += QString("<p><b>%1:%2</b> %3</p>")
+                                        .arg(chapter)
+                                        .arg(vNum)
+                                        .arg(text);
+                }
+            }
+        }
+    }
+
+    // 3. Format final HTML: Badge + Scripture quote + Commentary body
+    QString formattedOutput;
+    formattedOutput += verseBadge;
+    if (!coveredVerseText.isEmpty()) {
+        formattedOutput += QString("<div style='color:#808080;'><i>%1</i></div><hr/>")
+                           .arg(coveredVerseText);
+    }
+    formattedOutput += rawCommentary;
+
+    return formattedOutput;
+}
+
+QVariantList BibleManager::getDictionaryModules()
+{
+    QVariantList list;
+    QDir dir(m_modulesPath);
+
+    // Scan all SQLite files in the modules directory
+    QStringList filters;
+    filters << "*.SQLite3" << "*.sqlite3" << "*.SQLite" << "*.sqlite";
+
+    QFileInfoList files = dir.entryInfoList(filters, QDir::Files, QDir::Name);
+
+    for (const QFileInfo &fileInfo : files) {
+        QString fileName = fileInfo.fileName();
+        QString moduleName = fileInfo.completeBaseName();
+
+        // Skip files explicitly marked as commentaries
+        if (fileName.contains(".commentaries.", Qt::CaseInsensitive) ||
+            fileName.endsWith("-c.SQLite3", Qt::CaseInsensitive) ||
+            fileName.endsWith("-c.sqlite3", Qt::CaseInsensitive)) {
+            continue;
+        }
+
+        QString connectionName = "MyBible_Dict_" + moduleName;
+        QSqlDatabase db;
+        if (QSqlDatabase::contains(connectionName)) {
+            db = QSqlDatabase::database(connectionName);
+        } else {
+            db = QSqlDatabase::addDatabase("QSQLITE", connectionName);
+            db.setDatabaseName(fileInfo.absoluteFilePath());
+            if (!db.open()) continue;
+        }
+
+        QStringList tables = db.tables();
+
+        // Must contain a 'dictionary' table and MUST NOT contain a 'verses' table
+        bool hasDictTable = tables.contains("dictionary", Qt::CaseInsensitive);
+        bool hasVersesTable = tables.contains("verses", Qt::CaseInsensitive);
+
+        if (!hasDictTable || hasVersesTable) {
+            continue; // Skip Bibles, Commentaries, and other non-dictionary databases
+        }
+
+        QString title = moduleName;
+        QString language = "en";
+
+        QSqlQuery metaQuery(db);
+        if (metaQuery.exec("SELECT name, value FROM info")) {
+            while (metaQuery.next()) {
+                QString key = metaQuery.value(0).toString().toLower();
+                if (key == "description") title = metaQuery.value(1).toString();
+                else if (key == "language") language = metaQuery.value(1).toString();
+            }
+        } else if (metaQuery.exec("SELECT name, value FROM details")) {
+            while (metaQuery.next()) {
+                QString key = metaQuery.value(0).toString().toLower();
+                if (key == "description") title = metaQuery.value(1).toString();
+                else if (key == "language") language = metaQuery.value(1).toString();
+            }
+        }
+
+        QVariantMap item;
+        item["moduleName"] = moduleName;
+        item["title"] = title;
+        item["language"] = getLanguageDisplayName(language);
+        list.append(item);
+    }
+
+    return list;
+}
+
+QString BibleManager::getDictionaryDefinition(const QString &moduleName, const QString &topic)
+{
+    qDebug() << "[BibleManager] getDictionaryDefinition requested -> Module:" << moduleName << "| Topic:" << topic;
+
+    if (moduleName.trimmed().isEmpty()) {
+        qDebug() << "[BibleManager] Error: moduleName is empty!";
+        return QString();
+    }
+
+    // Locate module file dynamically
+    QDir dir(m_modulesPath);
+    QStringList filters;
+    filters << moduleName + ".SQLite3" << moduleName + ".sqlite3"
+            << moduleName + ".dictionary.SQLite3" << moduleName + ".dictionary.sqlite3"
+            << moduleName + ".SQLite" << moduleName + ".sqlite";
+
+    QFileInfoList files = dir.entryInfoList(filters, QDir::Files);
+    if (files.isEmpty()) {
+        qDebug() << "[BibleManager] Error: Could not find dictionary file for module:" << moduleName;
+        return QString();
+    }
+
+    QString connectionName = "MyBible_Dict_" + moduleName;
+    QSqlDatabase db;
+
+    if (QSqlDatabase::contains(connectionName)) {
+        db = QSqlDatabase::database(connectionName);
+    } else {
+        db = QSqlDatabase::addDatabase("QSQLITE", connectionName);
+        db.setDatabaseName(files.first().absoluteFilePath());
+    }
+
+    if (!db.isOpen() && !db.open()) {
+        qDebug() << "[BibleManager] Error: Failed to open SQLite database for connection:" << connectionName;
+        return QString();
+    }
+
+    QSqlQuery q(db);
+
+    // Identify actual column names in the 'dictionary' table (schema tolerance)
+    QString topicCol = "topic";
+    QString defCol = "definition";
+
+    QSqlRecord rec = db.record("dictionary");
+    if (!rec.isEmpty()) {
+        if (rec.contains("word")) topicCol = "word";
+        else if (rec.contains("topic")) topicCol = "topic";
+
+        if (rec.contains("definition")) defCol = "definition";
+        else if (rec.contains("text")) defCol = "text";
+        else if (rec.contains("d")) defCol = "d";
+    }
+
+    // Case 1: If topic is empty, fetch the first available record in the table
+    if (topic.trimmed().isEmpty()) {
+        QString defaultQueryStr = QString("SELECT %1 FROM dictionary LIMIT 1").arg(defCol);
+        if (q.exec(defaultQueryStr) && q.next()) {
+            qDebug() << "[BibleManager] Loaded fallback (first entry) from dictionary.";
+            return q.value(0).toString();
+        }
+        return QString();
+    }
+
+    QString searchTerm = topic.trimmed();
+
+    // Case 2: Direct case-insensitive search
+    QString queryStr = QString("SELECT %1 FROM dictionary WHERE lower(%2) = lower(:topic) LIMIT 1")
+                             .arg(defCol, topicCol);
+    q.prepare(queryStr);
+    q.bindValue(":topic", searchTerm);
+
+    if (q.exec() && q.next()) {
+        qDebug() << "[BibleManager] Found exact match for topic:" << searchTerm;
+        return q.value(0).toString();
+    }
+
+    // Case 3: Strong's number variant match (stripping H/G prefixes and zero-padding)
+    QString cleanNum = searchTerm;
+    cleanNum.remove(QRegExp("^[HGhg]"));
+
+    if (!cleanNum.isEmpty() && cleanNum.at(0).isDigit()) {
+        int numVal = cleanNum.toInt();
+        QString paddedNum4 = QString("%1").arg(numVal, 4, 10, QChar('0'));
+        QString paddedNum5 = QString("%1").arg(numVal, 5, 10, QChar('0'));
+        QString strongH = "H" + QString::number(numVal);
+        QString strongG = "G" + QString::number(numVal);
+
+        QString strongQueryStr = QString("SELECT %1 FROM dictionary WHERE %2 = :num "
+                                         "OR %2 = :padded4 OR %2 = :padded5 "
+                                         "OR %2 = :strongH OR %2 = :strongG LIMIT 1")
+                                         .arg(defCol, topicCol);
+        q.prepare(strongQueryStr);
+        q.bindValue(":num", cleanNum);
+        q.bindValue(":padded4", paddedNum4);
+        q.bindValue(":padded5", paddedNum5);
+        q.bindValue(":strongH", strongH);
+        q.bindValue(":strongG", strongG);
+
+        if (q.exec() && q.next()) {
+            qDebug() << "[BibleManager] Found Strong's match for code:" << searchTerm;
+            return q.value(0).toString();
+        }
+    }
+
+    // Case 4: Prefix/LIKE search fallback
+    QString likeQueryStr = QString("SELECT %1 FROM dictionary WHERE %2 LIKE :likeTerm LIMIT 1")
+                               .arg(defCol, topicCol);
+    q.prepare(likeQueryStr);
+    q.bindValue(":likeTerm", searchTerm + "%");
+
+    if (q.exec() && q.next()) {
+        qDebug() << "[BibleManager] Found partial LIKE match for:" << searchTerm;
+        return q.value(0).toString();
+    }
+
+    q.clear();
+    qDebug() << "[BibleManager] No definition found for topic:" << searchTerm << "in module:" << moduleName;
+    return QString();
+}
+
+QVariantList BibleManager::searchDictionary(const QString &moduleName, const QString &query)
+{
+    QVariantList list;
+    if (moduleName.isEmpty() || query.trimmed().isEmpty()) return list;
+
+    QDir dir(m_modulesPath);
+    QStringList filters;
+    filters << moduleName + ".SQLite3" << moduleName + ".sqlite3"
+            << moduleName + ".dictionary.SQLite3" << moduleName + ".dictionary.sqlite3"
+            << moduleName + ".SQLite" << moduleName + ".sqlite";
+
+    QFileInfoList files = dir.entryInfoList(filters, QDir::Files);
+    if (files.isEmpty()) return list;
+
+    QString connectionName = "MyBible_Dict_" + moduleName;
+    QSqlDatabase db;
+    if (QSqlDatabase::contains(connectionName)) {
+        db = QSqlDatabase::database(connectionName);
+    } else {
+        db = QSqlDatabase::addDatabase("QSQLITE", connectionName);
+        db.setDatabaseName(files.first().absoluteFilePath());
+        if (!db.open()) return list;
+    }
+
+    QSqlQuery q(db);
+    q.prepare("SELECT topic FROM dictionary WHERE topic LIKE :q ORDER BY topic ASC LIMIT 100");
+    q.bindValue(":q", query.trimmed() + "%");
+
+    if (q.exec()) {
+        while (q.next()) {
+            list.append(q.value(0).toString());
+        }
+    }
+
+    return list;
+}
+
+QVariantList BibleManager::searchAllDictionaries(const QString &query)
+{
+    QVariantList results;
+    QString searchTerm = query.trimmed();
+    if (searchTerm.length() < 2) return results;
+
+    // Hämta alla tillgängliga ordböcker
+    QVariantList dictModules = getDictionaryModules();
+
+    for (const QVariant &dictVar : dictModules) {
+        QVariantMap dictMap = dictVar.toMap();
+        QString moduleName = dictMap["moduleName"].toString();
+        QString dictTitle = dictMap["title"].toString();
+
+        QDir dir(m_modulesPath);
+        QStringList filters;
+        filters << moduleName + ".SQLite3" << moduleName + ".sqlite3"
+                << moduleName + ".dictionary.SQLite3" << moduleName + ".dictionary.sqlite3"
+                << moduleName + ".SQLite" << moduleName + ".sqlite";
+
+        QFileInfoList files = dir.entryInfoList(filters, QDir::Files);
+        if (files.isEmpty()) continue;
+
+        QString connectionName = "MyBible_Dict_" + moduleName;
+        QSqlDatabase db;
+        if (QSqlDatabase::contains(connectionName)) {
+            db = QSqlDatabase::database(connectionName);
+        } else {
+            db = QSqlDatabase::addDatabase("QSQLITE", connectionName);
+            db.setDatabaseName(files.first().absoluteFilePath());
+            if (!db.open()) continue;
+        }
+
+        QSqlQuery q(db);
+        // Sök strikt i topic-kolumnen (termer/uppslagsord)
+        q.prepare("SELECT topic FROM dictionary WHERE topic LIKE :q ORDER BY topic ASC LIMIT 20");
+        q.bindValue(":q", searchTerm + "%");
+
+        if (q.exec()) {
+            while (q.next()) {
+                QVariantMap item;
+                item["moduleName"] = moduleName;
+                item["dictTitle"] = dictTitle;
+                item["topic"] = q.value(0).toString();
+                results.append(item);
+            }
+        }
+    }
+
+    return results;
+}
+
+QString BibleManager::findStrongDictionaryModule(const QString &code)
+{
+    QVariantList dicts = getDictionaryModules();
+    if (dicts.isEmpty()) return QString();
+
+    // 1. Klicka först i den senast använda ordboken om den har koden
+    for (const QVariant &v : dicts) {
+        QString modName = v.toMap()["moduleName"].toString();
+        QString def = getDictionaryDefinition(modName, code);
+        if (!def.isEmpty()) {
+            return modName; // Hittade modulen som faktiskt svarar på koden!
+        }
+    }
+
+    return QString(); // Ingen installerad ordbok innehöll koden
 }
 
 void BibleManager::refreshModules()

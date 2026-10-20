@@ -125,13 +125,15 @@ Page {
         var prevSlot = (activeSlot + 2) % 3
         var nextSlot = (activeSlot + 1) % 3
 
+        // Declared once at function top to prevent QML static analyzer warning
+        var updated = [bufferSlots[0], bufferSlots[1], bufferSlots[2]]
+
         // Load new outer boundary in background
         if (direction > 0) { // Moved Next
             var nextRef = getAdjacentChapterRef(selectedBookId, selectedBookName, selectedChapter, 1)
             var nextData = nextRef ? { bookId: nextRef.bookId, bookName: nextRef.bookName, chapter: nextRef.chapter, verses: bibleManager.getChapterVerses(selectedModule, nextRef.bookId, nextRef.chapter) }
                                    : { bookId: "", bookName: "", chapter: 0, verses: [] }
 
-            var updated = [bufferSlots[0], bufferSlots[1], bufferSlots[2]]
             updated[nextSlot] = nextData
             bufferSlots = updated
         } else if (direction < 0) { // Moved Previous
@@ -139,7 +141,6 @@ Page {
             var prevData = prevRef ? { bookId: prevRef.bookId, bookName: prevRef.bookName, chapter: prevRef.chapter, verses: bibleManager.getChapterVerses(selectedModule, prevRef.bookId, prevRef.chapter) }
                                    : { bookId: "", bookName: "", chapter: 0, verses: [] }
 
-            var updated = [bufferSlots[0], bufferSlots[1], bufferSlots[2]]
             updated[prevSlot] = prevData
             bufferSlots = updated
         }
@@ -194,6 +195,30 @@ Page {
         confBookmarks.value = JSON.stringify(list)
     }
 
+    // Formats MyBible Strong's markup variants into clickable QML links
+    function formatStrongLinks(rawText) {
+        if (!rawText) return ""
+
+        var formatted = rawText
+
+        // 1. Matches <S>H7225</S>, <S>G746</S>, or <S>7225</S>
+        formatted = formatted.replace(/<S>([HG]?\d+)<\/S>/gi, function(match, code) {
+            return ' <a href="strong://' + code + '" style="text-decoration:none;"><font color="' + Theme.highlightColor + '"><sup>' + code + '</sup></font></a>'
+        })
+
+        // 2. Matches <w S="H7225">word</w>
+        formatted = formatted.replace(/<w\s+S="([HG]?\d+)">([^<]+)<\/w>/gi, function(match, code, word) {
+            return word + ' <a href="strong://' + code + '" style="text-decoration:none;"><font color="' + Theme.highlightColor + '"><sup>' + code + '</sup></font></a>'
+        })
+
+        // 3. Matches <f>S:H7225</f>
+        formatted = formatted.replace(/<f>S:([HG]?\d+)<\/f>/gi, function(match, code) {
+            return ' <a href="strong://' + code + '" style="text-decoration:none;"><font color="' + Theme.highlightColor + '"><sup>' + code + '</sup></font></a>'
+        })
+
+        return formatted
+    }
+
     SlideshowView {
         id: slideshow
         anchors.fill: parent
@@ -211,7 +236,6 @@ Page {
 
             if (currentIndex !== activeIndex) {
                 var delta = (currentIndex - activeIndex)
-                // Handle wrap-around math (e.g. 0 -> 2 or 2 -> 0)
                 if (delta === -2) delta = 1
                 if (delta === 2) delta = -1
 
@@ -268,7 +292,7 @@ Page {
                     onClicked: {
                         pageStack.push(Qt.resolvedUrl("SearchPage.qml"), {
                             "currentModule": page.selectedModule,
-                            "currentBookId": page.currentBookId || "Gen"
+                            "currentBookId": page.selectedBookId
                         })
                     }
                 }
@@ -303,9 +327,14 @@ Page {
                 }
 
                 MenuItem {
-                        text: qsTr("Bible Maps")
-                        onClicked: pageStack.push(Qt.resolvedUrl("MapPage.qml"))
-                    }
+                    text: qsTr("Dictionary")
+                    onClicked: pageStack.push(Qt.resolvedUrl("DictionaryPage.qml"))
+                }
+
+                MenuItem {
+                    text: qsTr("Bible Maps")
+                    onClicked: pageStack.push(Qt.resolvedUrl("MapPage.qml"))
+                }
 
                 MenuItem {
                     text: qsTr("Settings")
@@ -360,6 +389,18 @@ Page {
                                         verseDelegate.bookmarked = page.isBookmarked(verseDelegate.vData)
                                     }
                                 }
+                                MenuItem {
+                                    text: qsTr("Verse commentaries")
+                                    onClicked: {
+                                        pageStack.push(Qt.resolvedUrl("VerseCommentaryPage.qml"), {
+                                            "selectedBibleModule": page.selectedModule,
+                                            "bookId": page.selectedBookId,
+                                            "bookName": page.selectedBookName,
+                                            "chapter": page.selectedChapter,
+                                            "verse": model.verse !== undefined ? model.verse : (index + 1)
+                                        })
+                                    }
+                                }
                             }
 
                             onClicked: {
@@ -375,7 +416,6 @@ Page {
                                 anchors.topMargin: Theme.paddingExtraSmall
                                 spacing: Theme.paddingExtraSmall
 
-                                // Verstext (bevarar alla inlinemarkörer)
                                 Label {
                                     id: verseLabel
                                     width: parent.width
@@ -388,16 +428,34 @@ Page {
                                         if (!verseDelegate.vData || typeof verseDelegate.vData.verse === "undefined") return ""
 
                                         var vNum = verseDelegate.vData.verse
-                                        // Understryk versnumret om versen har en fotnot att fälla ut
                                         var vNumFormatted = verseDelegate.hasNote
                                                             ? "<u><b>" + vNum + "</b></u>"
                                                             : "<b>" + vNum + "</b>"
 
-                                        return vNumFormatted + " " + (verseDelegate.vData.text || "")
+                                        var formattedText = page.formatStrongLinks(verseDelegate.vData.text || "")
+
+                                        // FELSÖKNING: Skriv ut den genererade HTML-texten för vers 1
+                                        if (vNum === 1) {
+                                            console.log("[FirstPage] Formatterad text för vers 1:", formattedText)
+                                        }
+
+                                        return vNumFormatted + " " + formattedText
+                                    }
+
+                                    onLinkActivated: {
+                                        var linkStr = link.toString()
+                                        console.log("[FirstPage] LINK ACTIVATED! URL:", linkStr)
+
+                                        if (linkStr.indexOf("strong://") === 0) {
+                                            var strongCode = linkStr.replace("strong://", "")
+                                            console.log("[FirstPage] Navigating to DictionaryPage with code:", strongCode)
+                                            pageStack.push(Qt.resolvedUrl("DictionaryPage.qml"), {
+                                                "initialTopic": strongCode
+                                            })
+                                        }
                                     }
                                 }
 
-                                // Utfällbar fotnotslåda som visas vid tryck
                                 Label {
                                     id: noteLabel
                                     width: parent.width

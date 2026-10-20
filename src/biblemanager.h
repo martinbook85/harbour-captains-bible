@@ -76,6 +76,17 @@ public:
                                          int limit = 100,
                                          int offset = 0);
     Q_INVOKABLE QString getTranslatedBookName(const QString &moduleName, const QString &bookId);
+    Q_INVOKABLE QVariantList getCommentariesForVerse(const QString &bookId, int chapter, int verse);
+    Q_INVOKABLE QString getVerseCommentaryText(const QString &commentaryModule,
+                                              const QString &activeBibleModule,
+                                              const QString &bookId,
+                                              int chapter,
+                                              int verse);
+    Q_INVOKABLE QVariantList getDictionaryModules();
+    Q_INVOKABLE QString getDictionaryDefinition(const QString &moduleName, const QString &topic);
+    Q_INVOKABLE QVariantList searchDictionary(const QString &moduleName, const QString &query);
+    Q_INVOKABLE QVariantList searchAllDictionaries(const QString &query);
+    Q_INVOKABLE QString findStrongDictionaryModule(const QString &code);
 
 signals:
     void catalogUpdated();

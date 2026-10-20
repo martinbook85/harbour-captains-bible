@@ -1,7 +1,7 @@
 Name:       harbour-captains-bible
 Summary:    Captain's Bible
-Version:    0.2
-Release:    7
+Version:    0.3
+Release:    1
 License:    LICENSE
 URL:        http://example.org/
 Source0:    %{name}-%{version}.tar.bz2
@@ -40,8 +40,14 @@ desktop-file-install --delete-original \
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
+* Tue Oct 20 2026 Martin Book <martin@fambook.nu> - 0.3-1
+- Added working Strong's concordance integration with tap-to-open links
+- Implemented global multi-dictionary search and automatic module selection
+- Fixed QML delegate scoping and property resolution bugs
+- Verse commentary implemented by long press
+
 * Mon Oct 19 2026 Martin Book <martin@fambook.nu> 0.2-7
-- Made a filter to make sure only Bibles are in the list of "Select Bible translation"
+- Made a filter to make sure only Bibles are in the list of Select Bible translation
 
 * Sun Oct 18 2026 Martin Book <martin@fambook.nu> 0.2-6
 - Commentary view updated with verse numbers

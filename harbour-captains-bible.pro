@@ -41,11 +41,14 @@ TRANSLATIONS += translations/harbour-captains-bible-de.ts
 DISTFILES += \
     qml/pages/AboutPage.qml \
     qml/pages/BookmarksPage.qml \
+    qml/pages/DictionaryPage.qml \
     qml/pages/ImagePage.qml \
     qml/pages/MapPage.qml \
     qml/pages/SearchPage.qml \
     qml/pages/SearchResultChapterPage.qml \
-    qml/pages/SettingsPage.qml
+    qml/pages/SelectCommentaryDialog.qml \
+    qml/pages/SettingsPage.qml \
+    qml/pages/VerseCommentaryPage.qml
 
 # -----------------------------------------------------------------------------
 # Installation av extra filer (votd.json)
