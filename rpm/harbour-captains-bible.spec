@@ -1,7 +1,7 @@
 Name:       harbour-captains-bible
 Summary:    Captain's Bible
 Version:    0.3
-Release:    1
+Release:    2
 License:    LICENSE
 URL:        http://example.org/
 Source0:    %{name}-%{version}.tar.bz2
@@ -40,6 +40,10 @@ desktop-file-install --delete-original \
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
+* Wed Oct 21 2026 Martin Book <martin@fambook.nu> - 0.3-2
+- Bug fix for verse commentaries that previously were not shown
+- App remembers last read commentary
+
 * Tue Oct 20 2026 Martin Book <martin@fambook.nu> - 0.3-1
 - Added working Strong's concordance integration with tap-to-open links
 - Implemented global multi-dictionary search and automatic module selection

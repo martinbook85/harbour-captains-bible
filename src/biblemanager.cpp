@@ -1439,69 +1439,123 @@ QVariantList BibleManager::getCommentariesForVerse(const QString &bookId, int ch
 }
 
 QString BibleManager::getVerseCommentaryText(const QString &commentaryModule,
-                                          const QString &activeBibleModule,
-                                          const QString &bookId,
-                                          int chapter,
-                                          int verse)
+                                             const QString &activeBibleModule,
+                                             const QString &bookId,
+                                             int chapter,
+                                             int verse)
 {
-    if (commentaryModule.isEmpty() || bookId.isEmpty()) return QString();
+    if (commentaryModule.isEmpty() || bookId.isEmpty()) {
+        return QString();
+    }
 
     int bookNum = getMyBibleBookNumber(bookId);
+    if (bookNum <= 0) {
+        qDebug() << "[BibleManager] Invalid book mapping for bookId:" << bookId;
+        return QString();
+    }
+
     QSqlDatabase db = getCommentaryDatabase(commentaryModule);
-    if (!db.isOpen()) return QString();
+    if (!db.isOpen()) {
+        qDebug() << "[BibleManager] Database not open for commentary module:" << commentaryModule;
+        return QString();
+    }
+
+    // 1. Resolve table name ("commentaries" or "commentary")
+    QString tableName;
+    if (db.tables().contains("commentaries", Qt::CaseInsensitive)) {
+        tableName = "commentaries";
+    } else if (db.tables().contains("commentary", Qt::CaseInsensitive)) {
+        tableName = "commentary";
+    } else {
+        qDebug() << "[BibleManager] ERROR: No commentary table found in module:" << commentaryModule;
+        return QString();
+    }
+
+    // 2. Resolve columns in lowercase for case-insensitive matching
+    QSqlRecord rec = db.record(tableName);
+    QStringList lowerCols;
+    for (int i = 0; i < rec.count(); ++i) {
+        lowerCols << rec.fieldName(i).toLower();
+    }
+
+    // Text column
+    QString textCol = "text";
+    if (lowerCols.contains("text")) textCol = "text";
+    else if (lowerCols.contains("commentary")) textCol = "commentary";
+    else if (lowerCols.contains("d")) textCol = "d";
+
+    // Chapter column (Geneva uses chapter_number_from)
+    QString chapCol = lowerCols.contains("chapter_number_from") ? "chapter_number_from" :
+                      lowerCols.contains("chapter_number") ? "chapter_number" : "chapter";
+
+    // Verse range columns
+    QString vFromCol = lowerCols.contains("verse_number_from") ? "verse_number_from" :
+                       lowerCols.contains("verse_from") ? "verse_from" :
+                       lowerCols.contains("verse_number") ? "verse_number" : "verse";
+
+    QString vToCol = lowerCols.contains("verse_number_to") ? "verse_number_to" :
+                     lowerCols.contains("verse_to") ? "verse_to" : vFromCol;
 
     QSqlQuery q(db);
-    q.prepare("SELECT chapter_number_from, verse_number_from, chapter_number_to, verse_number_to, text "
-              "FROM commentaries "
-              "WHERE book_number = :book "
-              "AND ((chapter_number_from < :chap OR (chapter_number_from = :chap AND verse_number_from <= :verse)) "
-              "AND (chapter_number_to > :chap OR (chapter_number_to = :chap AND verse_number_to >= :verse))) "
-              "LIMIT 1");
-    q.bindValue(":book", bookNum);
-    q.bindValue(":chap", chapter);
-    q.bindValue(":verse", verse);
-
     int vFrom = 0;
     int vTo = 0;
-    QString rawCommentary = "";
+    QString rawCommentary;
+    bool foundMatch = false;
 
-    if (q.exec() && q.next()) {
-        vFrom = q.value(1).toInt();
-        vTo = q.value(3).toInt();
-        rawCommentary = q.value(4).toString();
-    } else {
-        // Fallback for verse_from / verse_to column schema
-        q.prepare("SELECT chapter_number_from, verse_from, chapter_number_to, verse_to, text "
-                  "FROM commentaries "
-                  "WHERE book_number = :book "
-                  "AND ((chapter_number_from < :chap OR (chapter_number_from = :chap AND verse_from <= :verse)) "
-                  "AND (chapter_number_to > :chap OR (chapter_number_to = :chap AND verse_to >= :verse))) "
-                  "LIMIT 1");
-        q.bindValue(":book", bookNum);
-        q.bindValue(":chap", chapter);
-        q.bindValue(":verse", verse);
+    // --- QUERY: Fetch all commentary entries for this Book and Chapter ---
+    // Mirroring renderCommentaryText's proven approach
+    QString sql = QString("SELECT %1, %2, %3 FROM %4 "
+                          "WHERE book_number = :book AND %5 = :chap "
+                          "ORDER BY %1 ASC")
+                  .arg(vFromCol)
+                  .arg(vToCol)
+                  .arg(textCol)
+                  .arg(tableName)
+                  .arg(chapCol);
 
-        if (q.exec() && q.next()) {
-            vFrom = q.value(1).toInt();
-            vTo = q.value(3).toInt();
-            rawCommentary = q.value(4).toString();
-        } else {
-            return QString();
+    q.prepare(sql);
+    q.bindValue(":book", bookNum);
+    q.bindValue(":chap", chapter);
+
+    if (q.exec()) {
+        while (q.next()) {
+            int entryFrom = q.value(0).toInt();
+            int entryTo = q.value(1).toInt();
+            if (entryTo == 0) entryTo = entryFrom;
+
+            // Check if requested verse falls within this commentary entry's range
+            if ((entryFrom == 0 && verse == 0) ||
+                (verse >= entryFrom && verse <= entryTo) ||
+                (entryFrom == 0 && !foundMatch)) { // Fallback to chapter overview if verse specific isn't found
+                vFrom = entryFrom;
+                vTo = entryTo;
+                rawCommentary = q.value(2).toString();
+                foundMatch = true;
+
+                // Exact verse or range match takes precedence
+                if (verse >= entryFrom && verse <= entryTo && entryFrom > 0) {
+                    break;
+                }
+            }
         }
     }
 
-    // 1. Build range badge
+    if (!foundMatch || rawCommentary.trimmed().isEmpty()) {
+        qDebug() << "[BibleManager] No commentary entry found for B:" << bookNum << "C:" << chapter << "V:" << verse << "in module:" << commentaryModule;
+        return QString();
+    }
+
+    // --- HTML RENDER & BIBLE VERSE EMBEDDING ---
     QString verseBadge;
     if (vFrom == 0) {
         verseBadge = "<b style='color: #008080;'>[Chapter Overview]</b><br/>";
-    } else if (vFrom == vTo || vTo == 0) {
+    } else if (vFrom == vTo) {
         verseBadge = QString("<b style='color: #008080;'>[Verse %1]</b><br/>").arg(vFrom);
     } else {
         verseBadge = QString("<b style='color: #008080;'>[Verses %1–%2]</b><br/>").arg(vFrom).arg(vTo);
     }
 
-    // 2. Fetch covered Scripture text from active Bible module
-    QString coveredVerseText = "";
+    QString coveredVerseText;
     if (!activeBibleModule.isEmpty()) {
         QSqlDatabase bibleDb = getModuleDatabase(activeBibleModule);
         if (bibleDb.isOpen()) {
@@ -1529,7 +1583,6 @@ QString BibleManager::getVerseCommentaryText(const QString &commentaryModule,
         }
     }
 
-    // 3. Format final HTML: Badge + Scripture quote + Commentary body
     QString formattedOutput;
     formattedOutput += verseBadge;
     if (!coveredVerseText.isEmpty()) {

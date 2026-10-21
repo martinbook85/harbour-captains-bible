@@ -1,5 +1,6 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
+import Nemo.Configuration 1.0
 
 Page {
     id: page
@@ -10,8 +11,16 @@ Page {
     property int chapter: 1
 
     property var commentaryList: []
-    property string selectedCommentaryModule: ""
     property string commentaryHtml: ""
+
+    // Spara senast valda kommentar-modul permanent i Sailfish dconf/settings
+    ConfigurationValue {
+        id: selectedCommentarySetting
+        key: "/apps/harbour-captains-bible/lastCommentaryModule"
+        defaultValue: ""
+    }
+
+    property string selectedCommentaryModule: selectedCommentarySetting.value
 
     Component.onCompleted: {
         loadCommentaries()
@@ -51,8 +60,10 @@ Page {
 
             commentaryList = enrichedList
 
+            // Om ingen modul är sparad sedan tidigare, välj den första i listan
             if (selectedCommentaryModule === "") {
                 selectedCommentaryModule = commentaryList[0].moduleName
+                selectedCommentarySetting.value = selectedCommentaryModule
             }
             loadText()
         }
@@ -87,7 +98,8 @@ Page {
 
     SilicaFlickable {
         anchors.fill: parent
-        contentHeight: column.height
+        // Använder implicitHeight för att säkerställa perfekt scrolling vid långa kommentarer
+        contentHeight: column.implicitHeight + Theme.paddingLarge
 
         PullDownMenu {
             MenuItem {
@@ -96,13 +108,18 @@ Page {
                 onClicked: {
                     var pageObj = pageStack.push(Qt.resolvedUrl("ModuleSelectPage.qml"), {
                         "biblesList": page.commentaryList,
-                        "currentModule": page.selectedCommentaryModule
+                        "currentModule": page.selectedCommentaryModule,
+                        "pageTitle": qsTr("Commentaries")
                     })
 
-                    pageObj.moduleSelected.connect(function(modName) {
+                    // Engångs-anslutning för att undvika minnesläckor eller dubblerade anrop
+                    var onModuleSelected = function(modName) {
                         page.selectedCommentaryModule = modName
+                        selectedCommentarySetting.value = modName // Spara valet permanent!
                         page.loadText()
-                    })
+                        pageObj.moduleSelected.disconnect(onModuleSelected)
+                    }
+                    pageObj.moduleSelected.connect(onModuleSelected)
                 }
             }
         }
@@ -114,7 +131,7 @@ Page {
 
             PageHeader {
                 title: page.bookName + " " + page.chapter
-                description: getShortCommentaryName()
+                description: page.getShortCommentaryName()
             }
 
             Label {
