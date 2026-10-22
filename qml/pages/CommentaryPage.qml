@@ -6,6 +6,8 @@ Page {
     id: page
     allowedOrientations: Orientation.All
 
+    // Active Bible module passed from main chapter view
+    property string selectedBibleModule: ""
     property string bookId: "Gen"
     property string bookName: "Genesis"
     property int chapter: 1
@@ -13,7 +15,21 @@ Page {
     property var commentaryList: []
     property string commentaryHtml: ""
 
-    // Spara senast valda kommentar-modul permanent i Sailfish dconf/settings
+    // Read stored active Bible module from dconf
+    ConfigurationValue {
+        id: lastBibleSetting
+        key: "/apps/harbour-captains-bible/selectedModule"
+        defaultValue: ""
+
+        // If dconf loads asynchronously after page creation, reload commentary text
+        onValueChanged: {
+            if (page.selectedBibleModule === "") {
+                page.loadText()
+            }
+        }
+    }
+
+    // Read stored commentary module from dconf
     ConfigurationValue {
         id: selectedCommentarySetting
         key: "/apps/harbour-captains-bible/lastCommentaryModule"
@@ -21,6 +37,10 @@ Page {
     }
 
     property string selectedCommentaryModule: selectedCommentarySetting.value
+
+    // Automatically trigger reload when selection changes
+    onSelectedBibleModuleChanged: loadText()
+    onSelectedCommentaryModuleChanged: loadText()
 
     Component.onCompleted: {
         loadCommentaries()
@@ -51,7 +71,6 @@ Page {
                     "moduleName": modName,
                     "title": modTitle,
                     "commentCount": count,
-                    // Format display title with a speech bubble indicator if comments exist
                     "displayTitle": count > 0
                                     ? modTitle + "  💬 (" + count + ")"
                                     : modTitle
@@ -60,7 +79,6 @@ Page {
 
             commentaryList = enrichedList
 
-            // Om ingen modul är sparad sedan tidigare, välj den första i listan
             if (selectedCommentaryModule === "") {
                 selectedCommentaryModule = commentaryList[0].moduleName
                 selectedCommentarySetting.value = selectedCommentaryModule
@@ -71,16 +89,24 @@ Page {
 
     function loadText() {
         if (selectedCommentaryModule === "" || bookId === "") return
-        commentaryHtml = bibleManager.renderCommentaryText(selectedCommentaryModule, bookId, chapter)
+
+        // 1. Prioritize passed selectedBibleModule
+        // 2. Fall back to dconf configuration
+        var bibleModuleToUse = selectedBibleModule !== "" ? selectedBibleModule : lastBibleSetting.value
+
+        commentaryHtml = bibleManager.renderCommentaryText(
+            selectedCommentaryModule,
+            bibleModuleToUse,
+            bookId,
+            chapter
+        )
     }
 
-    // Helper function to fetch and truncate the active commentary module name for header display
     function getShortCommentaryName() {
         if (!selectedCommentaryModule) return ""
 
         var displayName = selectedCommentaryModule
 
-        // Search commentaryList for a matching module title
         for (var i = 0; i < commentaryList.length; i++) {
             var item = commentaryList[i]
             if (typeof item === "object" && item.moduleName === selectedCommentaryModule) {
@@ -89,7 +115,6 @@ Page {
             }
         }
 
-        // Trim text if longer than 18 characters for a cleaner Sailfish PageHeader layout
         if (displayName.length > 18) {
             return displayName.substring(0, 16) + "..."
         }
@@ -98,7 +123,6 @@ Page {
 
     SilicaFlickable {
         anchors.fill: parent
-        // Använder implicitHeight för att säkerställa perfekt scrolling vid långa kommentarer
         contentHeight: column.implicitHeight + Theme.paddingLarge
 
         PullDownMenu {
@@ -112,10 +136,9 @@ Page {
                         "pageTitle": qsTr("Commentaries")
                     })
 
-                    // Engångs-anslutning för att undvika minnesläckor eller dubblerade anrop
                     var onModuleSelected = function(modName) {
                         page.selectedCommentaryModule = modName
-                        selectedCommentarySetting.value = modName // Spara valet permanent!
+                        selectedCommentarySetting.value = modName
                         page.loadText()
                         pageObj.moduleSelected.disconnect(onModuleSelected)
                     }

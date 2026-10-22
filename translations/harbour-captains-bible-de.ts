@@ -57,6 +57,10 @@
         <source>No commentary installed or available for this chapter.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Commentaries</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>CoverPage</name>

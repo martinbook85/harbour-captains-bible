@@ -319,6 +319,7 @@ Page {
                     text: qsTr("Commentary")
                     onClicked: {
                         pageStack.push(Qt.resolvedUrl("CommentaryPage.qml"), {
+                            "selectedBibleModule": page.selectedModule, // Pass active Bible module
                             "bookId": page.selectedBookId,
                             "bookName": page.selectedBookName,
                             "chapter": page.selectedChapter

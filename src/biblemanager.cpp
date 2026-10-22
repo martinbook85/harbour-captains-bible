@@ -560,54 +560,148 @@ QString BibleManager::renderChapterText(const QString &moduleName, const QString
     return htmlResult;
 }
 
-QString BibleManager::renderCommentaryText(const QString &moduleName, const QString &bookId, int chapter)
+QString BibleManager::renderCommentaryText(const QString &moduleName,
+                                            const QString &activeBibleModule,
+                                            const QString &bookId,
+                                            int chapter)
 {
+    qDebug() << "==========================================";
+    qDebug() << "[DEBUG renderCommentaryText] Called with:";
+    qDebug() << "  -> moduleName:" << moduleName;
+    qDebug() << "  -> activeBibleModule:" << activeBibleModule;
+    qDebug() << "  -> bookId:" << bookId << " (chapter:" << chapter << ")";
+
+    if (moduleName.isEmpty() || bookId.isEmpty()) {
+        qDebug() << "[DEBUG renderCommentaryText] ERROR: Empty moduleName or bookId!";
+        return QString();
+    }
+
     QSqlDatabase db = getCommentaryDatabase(moduleName);
-    if (!db.isOpen()) return QString();
+    if (!db.isOpen()) {
+        qDebug() << "[DEBUG renderCommentaryText] ERROR: Commentary DB not open for:" << moduleName;
+        return QString();
+    }
 
     int bookNum = getMyBibleBookNumber(bookId);
-    QSqlQuery q(db);
+    qDebug() << "  -> Mapped bookNum:" << bookNum;
+    if (bookNum <= 0) return QString();
 
-    // Fetch verse range columns along with the commentary text
-    // Ordering by verse keeps the commentary structured chronologically through the chapter
-    q.prepare("SELECT verse_number_from, verse_number_to, text FROM commentaries "
-              "WHERE book_number = :book AND chapter_number_from = :chapter "
-              "ORDER BY verse_number_from ASC");
+    // Table detection
+    QString tableName;
+    if (db.tables().contains("commentaries", Qt::CaseInsensitive)) {
+        tableName = "commentaries";
+    } else if (db.tables().contains("commentary", Qt::CaseInsensitive)) {
+        tableName = "commentary";
+    } else {
+        qDebug() << "[DEBUG renderCommentaryText] ERROR: No commentary table found!";
+        return QString();
+    }
+
+    // Column mapping
+    QSqlRecord rec = db.record(tableName);
+    QStringList lowerCols;
+    for (int i = 0; i < rec.count(); ++i) lowerCols << rec.fieldName(i).toLower();
+
+    QString textCol = lowerCols.contains("text") ? "text" :
+                      lowerCols.contains("commentary") ? "commentary" : "d";
+
+    QString chapCol = lowerCols.contains("chapter_number_from") ? "chapter_number_from" :
+                      lowerCols.contains("chapter_number") ? "chapter_number" : "chapter";
+
+    QString vFromCol = lowerCols.contains("verse_number_from") ? "verse_number_from" :
+                       lowerCols.contains("verse_from") ? "verse_from" :
+                       lowerCols.contains("verse_number") ? "verse_number" : "verse";
+
+    QString vToCol = lowerCols.contains("verse_number_to") ? "verse_number_to" :
+                     lowerCols.contains("verse_to") ? "verse_to" : vFromCol;
+
+    QSqlQuery q(db);
+    QString sql = QString("SELECT %1, %2, %3 FROM %4 "
+                          "WHERE book_number = :book AND %5 = :chap "
+                          "ORDER BY %1 ASC")
+                  .arg(vFromCol).arg(vToCol).arg(textCol).arg(tableName).arg(chapCol);
+
+    q.prepare(sql);
     q.bindValue(":book", bookNum);
-    q.bindValue(":chapter", chapter);
+    q.bindValue(":chap", chapter);
 
     if (!q.exec()) {
-        // Fallback query in case the table uses 'verse_from' / 'verse_to' schema
-        q.prepare("SELECT verse_from, verse_to, text FROM commentaries "
-                  "WHERE book_number = :book AND chapter_number_from = :chapter "
-                  "ORDER BY verse_from ASC");
-        q.bindValue(":book", bookNum);
-        q.bindValue(":chapter", chapter);
+        qDebug() << "[DEBUG renderCommentaryText] ERROR executing main SQL:" << q.lastError().text();
+        return QString();
+    }
 
-        if (!q.exec()) return QString();
+    // Test Bible DB connection before entering loop
+    if (!activeBibleModule.isEmpty()) {
+        QSqlDatabase testBibleDb = getModuleDatabase(activeBibleModule);
+        qDebug() << "  -> Testing Bible DB connection for" << activeBibleModule
+                 << "isOpen:" << testBibleDb.isOpen();
+    } else {
+        qDebug() << "  -> WARNING: activeBibleModule is EMPTY!";
     }
 
     QString resultHtml;
+    int commentCount = 0;
+    int verseQuoteCount = 0;
+
     while (q.next()) {
+        commentCount++;
         int vFrom = q.value(0).toInt();
-        int vTo = q.value(1).toInt();
+        int rawVTo = q.value(1).toInt();
+        int fetchTo = (rawVTo > 0) ? rawVTo : vFrom;
+
         QString commentText = q.value(2).toString();
 
-        // 1. Build a styled verse badge
+        // Badge
         QString verseBadge;
         if (vFrom == 0) {
             verseBadge = "<b style='color: #008080;'>[Chapter Overview]</b><br/>";
-        } else if (vFrom == vTo || vTo == 0) {
+        } else if (vFrom == fetchTo) {
             verseBadge = QString("<b style='color: #008080;'>[Verse %1]</b><br/>").arg(vFrom);
         } else {
-            verseBadge = QString("<b style='color: #008080;'>[Verses %1–%2]</b><br/>").arg(vFrom).arg(vTo);
+            verseBadge = QString("<b style='color: #008080;'>[Verses %1–%2]</b><br/>").arg(vFrom).arg(fetchTo);
         }
 
-        // 2. Append badge + comment text
+        // Bible Verse Retrieval
+        QString coveredVerseText;
+        if (vFrom > 0 && !activeBibleModule.isEmpty()) {
+            QSqlDatabase bibleDb = getModuleDatabase(activeBibleModule);
+            if (bibleDb.isOpen()) {
+                QSqlQuery bibleQuery(bibleDb);
+                bibleQuery.prepare("SELECT verse, text FROM verses "
+                                   "WHERE book_number = :book AND chapter = :chap "
+                                   "AND verse >= :vFrom AND verse <= :vTo "
+                                   "ORDER BY verse ASC");
+                bibleQuery.bindValue(":book", bookNum);
+                bibleQuery.bindValue(":chap", chapter);
+                bibleQuery.bindValue(":vFrom", vFrom);
+                bibleQuery.bindValue(":vTo", fetchTo);
+
+                if (bibleQuery.exec()) {
+                    while (bibleQuery.next()) {
+                        verseQuoteCount++;
+                        int vNum = bibleQuery.value("verse").toInt();
+                        QString text = bibleQuery.value("text").toString();
+                        coveredVerseText += QString("<p><b>%1:%2</b> %3</p>")
+                                            .arg(chapter).arg(vNum).arg(text);
+                    }
+                } else {
+                    qDebug() << "  -> ERROR in bibleQuery execution:" << bibleQuery.lastError().text();
+                }
+            }
+        }
+
         resultHtml.append(verseBadge);
+        if (!coveredVerseText.isEmpty()) {
+            resultHtml.append(QString("<div style='color:#808080;'><i>%1</i></div><hr/>")
+                              .arg(coveredVerseText));
+        }
         resultHtml.append(commentText);
         resultHtml.append("<br/><hr/><br/>");
     }
+
+    qDebug() << "[DEBUG renderCommentaryText] Processed" << commentCount
+             << "comments and fetched" << verseQuoteCount << "verse quotes.";
+    qDebug() << "==========================================";
 
     return resultHtml;
 }

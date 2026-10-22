@@ -57,9 +57,12 @@ public:
     Q_INVOKABLE int getVerseCount(const QString &moduleName, const QString &bookId, int chapter);
     Q_INVOKABLE QVariantList getChapterVerses(const QString &moduleName, const QString &bookId, int chapter);
     Q_INVOKABLE QString renderChapterText(const QString &moduleName, const QString &bookId, int chapter);
-    Q_INVOKABLE QString renderCommentaryText(const QString &moduleName, const QString &bookId, int chapter);
-    Q_INVOKABLE QVariantList getMapTopics(const QString &moduleName);
+    Q_INVOKABLE QString renderCommentaryText(const QString &moduleName,
+                                             const QString &activeBibleModule,
+                                             const QString &bookId,
+                                             int chapter);
     Q_INVOKABLE QString getMapDefinition(const QString &moduleName, const QString &topic);
+    Q_INVOKABLE QVariantList getMapTopics(const QString &moduleName);
     Q_INVOKABLE void fetchRemoteCatalog();
     Q_INVOKABLE void downloadModule(const QString &moduleName);
     Q_INVOKABLE void deleteModule(const QString &moduleName);
