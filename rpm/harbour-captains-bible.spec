@@ -1,7 +1,7 @@
 Name:       harbour-captains-bible
 Summary:    Captain's Bible
-Version:    0.3
-Release:    3
+Version:    0.4
+Release:    1
 License:    LICENSE
 URL:        http://example.org/
 Source0:    %{name}-%{version}.tar.bz2
@@ -40,6 +40,12 @@ desktop-file-install --delete-original \
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
+* Sat Oct 24 2026 Martin Book <martin@fambook.nu> 0.4-1
+- Added custom SQLite study notes system with topic auto-completion
+- Integrated inline verse notes editor with passage previews
+- Added customizable single-verse clipboard copying (headers/footers, delimiters, verse numbers)
+- Added display blanking prevention setting for scripture reading
+
 * Thu Oct 22 2026 Martin Book <martin@fambook.nu> 0.3-3
 - Embedded Scripture verse excerpts inside full chapter commentary view
 - Fixed active Bible module resolving from dconf settings

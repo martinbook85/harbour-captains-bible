@@ -1984,6 +1984,230 @@ QString BibleManager::findStrongDictionaryModule(const QString &code)
     return QString(); // Ingen installerad ordbok innehöll koden
 }
 
+QSqlDatabase BibleManager::getUserNotesDatabase()
+{
+    QString connName = "UserNotesDatabase";
+    if (QSqlDatabase::contains(connName)) {
+        QSqlDatabase db = QSqlDatabase::database(connName);
+        if (db.isOpen()) return db;
+    }
+
+    QString dbPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/user_notes.db";
+    QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", connName);
+    db.setDatabaseName(dbPath);
+
+    if (!db.open()) {
+        qDebug() << "[BibleManager] Failed to open user notes database at:" << dbPath;
+    } else {
+        initUserNotesDatabase();
+    }
+    return db;
+}
+
+void BibleManager::initUserNotesDatabase()
+{
+    QSqlDatabase db = QSqlDatabase::database("UserNotesDatabase");
+    if (!db.isOpen()) return;
+
+    QSqlQuery q(db);
+    q.exec("CREATE TABLE IF NOT EXISTS notes ("
+           "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+           "book_id TEXT NOT NULL, "
+           "chapter INTEGER NOT NULL, "
+           "verse_start INTEGER NOT NULL, "
+           "verse_end INTEGER NOT NULL, "
+           "topic TEXT NOT NULL DEFAULT 'Verse Notes', "
+           "title TEXT NOT NULL, "
+           "body TEXT NOT NULL, "
+           "created_at DATETIME DEFAULT CURRENT_TIMESTAMP"
+           ");");
+}
+
+bool BibleManager::saveNote(const QString &bookId, int chapter, int verseStart, int verseEnd,
+                            const QString &topic, const QString &title, const QString &body)
+{
+    QSqlDatabase db = getUserNotesDatabase();
+    if (!db.isOpen()) return false;
+
+    QSqlQuery q(db);
+    q.prepare("SELECT id FROM notes WHERE book_id = :book AND chapter = :chap AND verse_start = :vStart AND verse_end = :vEnd");
+    q.bindValue(":book", bookId);
+    q.bindValue(":chap", chapter);
+    q.bindValue(":vStart", verseStart);
+    q.bindValue(":vEnd", verseEnd);
+
+    if (q.exec() && q.next()) {
+        int noteId = q.value(0).toInt();
+        QSqlQuery uq(db);
+        uq.prepare("UPDATE notes SET topic = :topic, title = :title, body = :body WHERE id = :id");
+        uq.bindValue(":topic", topic.isEmpty() ? "Verse Notes" : topic);
+        uq.bindValue(":title", title);
+        uq.bindValue(":body", body);
+        uq.bindValue(":id", noteId);
+        return uq.exec();
+    } else {
+        QSqlQuery iq(db);
+        iq.prepare("INSERT INTO notes (book_id, chapter, verse_start, verse_end, topic, title, body) "
+                   "VALUES (:book, :chap, :vStart, :vEnd, :topic, :title, :body)");
+        iq.bindValue(":book", bookId);
+        iq.bindValue(":chap", chapter);
+        iq.bindValue(":vStart", verseStart);
+        iq.bindValue(":vEnd", verseEnd);
+        iq.bindValue(":topic", topic.isEmpty() ? "Verse Notes" : topic);
+        iq.bindValue(":title", title);
+        iq.bindValue(":body", body);
+        return iq.exec();
+    }
+}
+
+QVariantMap BibleManager::getNoteForVerse(const QString &bookId, int chapter, int verse)
+{
+    QVariantMap res;
+    QSqlDatabase db = getUserNotesDatabase();
+    if (!db.isOpen()) return res;
+
+    QSqlQuery q(db);
+    q.prepare("SELECT id, topic, title, body, created_at FROM notes "
+              "WHERE book_id = :book AND chapter = :chap AND :v >= verse_start AND :v <= verse_end "
+              "ORDER BY id DESC LIMIT 1");
+    q.bindValue(":book", bookId);
+    q.bindValue(":chap", chapter);
+    q.bindValue(":v", verse);
+
+    if (q.exec() && q.next()) {
+        res["id"] = q.value(0).toInt();
+        res["topic"] = q.value(1).toString();
+        res["title"] = q.value(2).toString();
+        res["body"] = q.value(3).toString();
+        res["createdAt"] = q.value(4).toString();
+    }
+    return res;
+}
+
+QVariantList BibleManager::getAllNotes(const QString &topicFilter)
+{
+    QVariantList list;
+    QSqlDatabase db = getUserNotesDatabase();
+    if (!db.isOpen()) return list;
+
+    QSqlQuery q(db);
+    if (!topicFilter.isEmpty() && topicFilter.compare("All", Qt::CaseInsensitive) != 0) {
+        q.prepare("SELECT id, book_id, chapter, verse_start, verse_end, topic, title, body, created_at FROM notes WHERE topic = :topic ORDER BY id DESC");
+        q.bindValue(":topic", topicFilter);
+    } else {
+        q.prepare("SELECT id, book_id, chapter, verse_start, verse_end, topic, title, body, created_at FROM notes ORDER BY id DESC");
+    }
+
+    if (q.exec()) {
+        while (q.next()) {
+            QVariantMap item;
+            item["id"] = q.value(0).toInt();
+            item["bookId"] = q.value(1).toString();
+            item["chapter"] = q.value(2).toInt();
+            item["verseStart"] = q.value(3).toInt();
+            item["verseEnd"] = q.value(4).toInt();
+            item["topic"] = q.value(5).toString();
+            item["title"] = q.value(6).toString();
+            item["body"] = q.value(7).toString();
+            item["createdAt"] = q.value(8).toString();
+            list.append(item);
+        }
+    }
+    return list;
+}
+
+bool BibleManager::deleteNote(int noteId)
+{
+    QSqlDatabase db = getUserNotesDatabase();
+    if (!db.isOpen()) return false;
+
+    QSqlQuery q(db);
+    q.prepare("DELETE FROM notes WHERE id = :id");
+    q.bindValue(":id", noteId);
+    return q.exec();
+}
+
+QString BibleManager::formatVersesForClipboard(const QString &moduleName, const QString &bookId,
+                                              const QString &bookName, int chapter,
+                                              int verseStart, int verseEnd,
+                                              int placementMode, bool showVerseNumbers,
+                                              const QString &delimiter, const QString &rangeDash)
+{
+    QSqlDatabase db = getModuleDatabase(moduleName);
+    if (!db.isOpen()) return QString();
+
+    int bookNum = getMyBibleBookNumber(bookId);
+    QSqlQuery q(db);
+    q.prepare("SELECT verse, text FROM verses WHERE book_number = :book AND chapter = :chap AND verse >= :vFrom AND verse <= :vTo ORDER BY verse ASC");
+    q.bindValue(":book", bookNum);
+    q.bindValue(":chap", chapter);
+    q.bindValue(":vFrom", verseStart);
+    q.bindValue(":vTo", verseEnd);
+
+    if (!q.exec()) return QString();
+
+    QString passageText;
+    while (q.next()) {
+        int vNum = q.value(0).toInt();
+        QString raw = q.value(1).toString();
+
+        // 1. Remove whole footnote, cross-reference, and Strong's number tags along with their contents
+        raw.remove(QRegExp("<f>.*?</f>", Qt::CaseInsensitive));
+        raw.remove(QRegExp("<r>.*?</r>", Qt::CaseInsensitive));
+        raw.remove(QRegExp("<S>.*?</S>", Qt::CaseInsensitive));
+
+        // 2. Remove any remaining HTML/XML tags
+        raw.remove(QRegExp("<[^>]*>"));
+
+        // 3. Clean up extra whitespaces and internal linebreaks
+        raw = raw.trimmed().simplified();
+
+        if (showVerseNumbers) {
+            passageText += QString("%1 %2\n").arg(vNum).arg(raw);
+        } else {
+            passageText += QString("%1\n").arg(raw);
+        }
+    }
+
+    passageText = passageText.trimmed();
+
+    // Use dynamic book name from module metadata + configured delimiters
+    QString sep = delimiter.isEmpty() ? ":" : delimiter;
+    QString dash = rangeDash.isEmpty() ? "–" : rangeDash;
+
+    QString refStr;
+    if (verseStart == verseEnd) {
+        refStr = QString("%1 %2%3%4").arg(bookName).arg(chapter).arg(sep).arg(verseStart);
+    } else {
+        refStr = QString("%1 %2%3%4%5%6").arg(bookName).arg(chapter).arg(sep).arg(verseStart).arg(dash).arg(verseEnd);
+    }
+
+    // placementMode: 0 = Header, 1 = Footer
+    if (placementMode == 0) {
+        return QString("%1\n%2").arg(refStr, passageText);
+    } else {
+        return QString("%1\n— %2").arg(passageText, refStr);
+    }
+}
+
+QStringList BibleManager::getNoteTopics()
+{
+    QStringList topics;
+    QSqlDatabase db = getUserNotesDatabase();
+    if (!db.isOpen()) return topics;
+
+    QSqlQuery q(db);
+    if (q.exec("SELECT DISTINCT topic FROM notes ORDER BY topic ASC")) {
+        while (q.next()) {
+            QString t = q.value(0).toString().trimmed();
+            if (!t.isEmpty()) {
+                topics.append(t);
+            }
+        }
+    }
+    return topics;
+}
+
 void BibleManager::refreshModules()
 {
     emit catalogUpdated();

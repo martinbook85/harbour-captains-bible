@@ -159,14 +159,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Remove bookmark</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Bookmark verse</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Bible Maps</source>
         <translation type="unfinished"></translation>
     </message>
@@ -180,6 +172,10 @@
     </message>
     <message>
         <source>Dictionary</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Study Notes</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -300,6 +296,45 @@
     </message>
 </context>
 <context>
+    <name>NoteEditorPage</name>
+    <message>
+        <source>Edit Note</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>New Study Note</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Topic / Folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Note Title</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Study Note</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Write your personal notes or comments here...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save Note</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>General Note Title</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Create or choose topic</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>SearchPage</name>
     <message>
         <source>Search Bible</source>
@@ -404,6 +439,73 @@
     </message>
     <message>
         <source>About</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Verse Copying Format</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Reference Placement</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Before text (Header: John 3:16)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>After text (Footer: — John 3:16)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Chapter / Verse Separator</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Colon (John 3:16 - English/Intl)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Comma (Joh 3,16 - European)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Include verse numbers</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add verse numbers before each copied verse</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Keep screen on in Bible view</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Prevents the display from turning off while reading scripture</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>StudyNotesPage</name>
+    <message>
+        <source>Study Notes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No study notes saved yet</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add new study note</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Pull down to add a note or long-press any verse in Bible view</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

@@ -90,6 +90,17 @@ public:
     Q_INVOKABLE QVariantList searchDictionary(const QString &moduleName, const QString &query);
     Q_INVOKABLE QVariantList searchAllDictionaries(const QString &query);
     Q_INVOKABLE QString findStrongDictionaryModule(const QString &code);
+    Q_INVOKABLE bool saveNote(const QString &bookId, int chapter, int verseStart, int verseEnd,
+                              const QString &topic, const QString &title, const QString &body);
+    Q_INVOKABLE QVariantMap getNoteForVerse(const QString &bookId, int chapter, int verse);
+    Q_INVOKABLE QVariantList getAllNotes(const QString &topicFilter = QString());
+    Q_INVOKABLE bool deleteNote(int noteId);
+    Q_INVOKABLE QString formatVersesForClipboard(const QString &moduleName, const QString &bookId,
+                                                 const QString &bookName, int chapter,
+                                                 int verseStart, int verseEnd,
+                                                 int placementMode, bool showVerseNumbers,
+                                                 const QString &delimiter, const QString &rangeDash);
+    Q_INVOKABLE QStringList getNoteTopics();
 
 signals:
     void catalogUpdated();
@@ -113,6 +124,8 @@ private:
     QString m_modulesPath;
     QString m_catalogPath;
     bool m_isFetchingCatalog;
+    QSqlDatabase getUserNotesDatabase();
+    void initUserNotesDatabase();
 
     QNetworkAccessManager m_networkManager;
     QMap<QNetworkReply*, QString> m_replyToModuleNameMap;

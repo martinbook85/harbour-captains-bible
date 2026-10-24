@@ -1,6 +1,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Nemo.Configuration 1.0
+import Nemo.KeepAlive 1.2
 
 Page {
     id: page
@@ -15,6 +16,21 @@ Page {
     // Persistent bookmarks storage
     ConfigurationValue { id: confBookmarks; key: "/apps/harbour-captains-bible/bookmarks"; defaultValue: "[]" }
     ConfigurationValue { id: confTargetVerse; key: "/apps/harbour-captains-bible/targetVerse"; defaultValue: 0 }
+
+    ConfigurationValue { id: confRefPlacement; key: "/apps/harbour-captains-bible/refPlacement"; defaultValue: 0 }
+    ConfigurationValue { id: confShowVerseNums; key: "/apps/harbour-captains-bible/showVerseNums"; defaultValue: true }
+    ConfigurationValue { id: confDelimiter; key: "/apps/harbour-captains-bible/refDelimiter"; defaultValue: ":" }
+
+    ConfigurationValue {
+        id: confKeepScreenOn
+        key: "/apps/harbour-captains-bible/keepScreenOn"
+        defaultValue: false
+    }
+
+    DisplayBlanking {
+        // Prevents screen from blanking when setting is used AND page is active
+        preventBlanking: confKeepScreenOn.value && page.status === PageStatus.Active
+    }
 
     property string selectedModule: confModule.value
     property string selectedBookId: confBookId.value
@@ -338,6 +354,11 @@ Page {
                 }
 
                 MenuItem {
+                        text: qsTr("Study Notes")
+                        onClicked: pageStack.push(Qt.resolvedUrl("StudyNotesPage.qml"))
+                    }
+
+                MenuItem {
                     text: qsTr("Settings")
                     onClicked: pageStack.push(Qt.resolvedUrl("SettingsPage.qml"))
                 }
@@ -383,13 +404,65 @@ Page {
                             property bool bookmarked: page.isBookmarked(vData)
 
                             menu: ContextMenu {
-                                MenuItem {
-                                    text: verseDelegate.bookmarked ? qsTr("Remove bookmark") : qsTr("Bookmark verse")
-                                    onClicked: {
-                                        page.toggleBookmark(verseDelegate.vData)
-                                        verseDelegate.bookmarked = page.isBookmarked(verseDelegate.vData)
+                                id: verseContextMenu
+
+                                // Quick action icon row
+                                Row {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    spacing: Theme.paddingLarge
+                                    height: Theme.itemSizeSmall
+
+                                    IconButton {
+                                        icon.source: verseDelegate.bookmarked
+                                                     ? "image://theme/icon-m-attach"
+                                                     : "image://theme/icon-m-attach?color=" + Theme.secondaryColor
+                                        onClicked: {
+                                            page.toggleBookmark(verseDelegate.vData)
+                                            verseDelegate.bookmarked = page.isBookmarked(verseDelegate.vData)
+                                            verseContextMenu.close()
+                                        }
+                                    }
+
+                                    IconButton {
+                                        icon.source: "image://theme/icon-m-clipboard"
+                                        onClicked: {
+                                            var vNum = verseDelegate.vData.verse
+                                            var formattedStr = bibleManager.formatVersesForClipboard(
+                                                page.selectedModule,
+                                                page.selectedBookId,
+                                                page.selectedBookName,
+                                                page.selectedChapter,
+                                                vNum,
+                                                vNum,
+                                                confRefPlacement.value,
+                                                confShowVerseNums.value,
+                                                confDelimiter.value,
+                                                "–"
+                                            )
+                                            Clipboard.text = formattedStr
+                                            verseContextMenu.close()
+                                        }
+                                    }
+
+                                    IconButton {
+                                        icon.source: "image://theme/icon-m-edit"
+                                        onClicked: {
+                                            var vNum = verseDelegate.vData.verse
+                                            var existingNote = bibleManager.getNoteForVerse(page.selectedBookId, page.selectedChapter, vNum)
+
+                                            pageStack.push(Qt.resolvedUrl("NoteEditorPage.qml"), {
+                                                "bookId": page.selectedBookId,
+                                                "bookName": page.selectedBookName,
+                                                "chapter": page.selectedChapter,
+                                                "verseStart": vNum,
+                                                "verseEnd": vNum,
+                                                "existingNote": existingNote
+                                            })
+                                            verseContextMenu.close()
+                                        }
                                     }
                                 }
+
                                 MenuItem {
                                     text: qsTr("Verse commentaries")
                                     onClicked: {

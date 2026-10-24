@@ -44,10 +44,12 @@ DISTFILES += \
     qml/pages/DictionaryPage.qml \
     qml/pages/ImagePage.qml \
     qml/pages/MapPage.qml \
+    qml/pages/NoteEditorPage.qml \
     qml/pages/SearchPage.qml \
     qml/pages/SearchResultChapterPage.qml \
     qml/pages/SelectCommentaryDialog.qml \
     qml/pages/SettingsPage.qml \
+    qml/pages/StudyNotesPage.qml \
     qml/pages/VerseCommentaryPage.qml
 
 # -----------------------------------------------------------------------------
