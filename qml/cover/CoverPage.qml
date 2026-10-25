@@ -126,7 +126,7 @@ CoverBackground {
         id: coverAction
 
         CoverAction {
-            iconSource: "image://theme/icon-s-left"
+            iconSource: "image://theme/icon-splus-left"
             onTriggered: cover.updateContent(cover.daysOffset - 1)
         }
 

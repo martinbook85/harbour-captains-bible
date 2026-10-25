@@ -178,6 +178,18 @@
         <source>Study Notes</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Copy (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select multiple</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ImagePage</name>
@@ -506,6 +518,10 @@
     </message>
     <message>
         <source>Pull down to add a note or long-press any verse in Bible view</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Verse Notes</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

@@ -17,10 +17,13 @@ Page {
     ConfigurationValue { id: confBookmarks; key: "/apps/harbour-captains-bible/bookmarks"; defaultValue: "[]" }
     ConfigurationValue { id: confTargetVerse; key: "/apps/harbour-captains-bible/targetVerse"; defaultValue: 0 }
 
-    ConfigurationValue { id: confRefPlacement; key: "/apps/harbour-captains-bible/refPlacement"; defaultValue: 0 }
+    // Clipboard formatting settings
+    ConfigurationValue { id: confCopyPlacement; key: "/apps/harbour-captains-bible/copyPlacement"; defaultValue: 0 }
     ConfigurationValue { id: confShowVerseNums; key: "/apps/harbour-captains-bible/showVerseNums"; defaultValue: true }
     ConfigurationValue { id: confDelimiter; key: "/apps/harbour-captains-bible/refDelimiter"; defaultValue: ":" }
+    ConfigurationValue { id: confRangeDash; key: "/apps/harbour-captains-bible/refRangeDash"; defaultValue: "–" }
 
+    // Screen keep-alive setting
     ConfigurationValue {
         id: confKeepScreenOn
         key: "/apps/harbour-captains-bible/keepScreenOn"
@@ -28,7 +31,7 @@ Page {
     }
 
     DisplayBlanking {
-        // Prevents screen from blanking when setting is used AND page is active
+        // Prevents screen from blanking when setting is active AND page is active
         preventBlanking: confKeepScreenOn.value && page.status === PageStatus.Active
     }
 
@@ -36,6 +39,14 @@ Page {
     property string selectedBookId: confBookId.value
     property string selectedBookName: confBookName.value
     property int selectedChapter: confChapter.value
+
+    // Multi-verse selection state
+    property bool selectionMode: false
+    property var selectedVerses: []
+
+    onSelectionModeChanged: {
+        console.log("[DEBUG] selectionMode changed ->", selectionMode)
+    }
 
     property var biblesList: []
 
@@ -62,6 +73,66 @@ Page {
             }
             bibleManager.refreshModules()
             loadBibles()
+        }
+    }
+
+    // Reliable Top Action Bar for Multi-Selection Mode
+    Rectangle {
+        id: selectionOverlay
+        width: parent.width
+        height: Theme.itemSizeMedium
+        anchors.top: parent.top
+        color: Theme.highlightBackgroundColor
+        opacity: page.selectionMode ? 0.95 : 0.0
+        visible: opacity > 0
+        z: 100 // Float above all Flickables and Slideshows
+
+        Behavior on opacity {
+            FadeAnimation { duration: 200 }
+        }
+
+        Row {
+            anchors.centerIn: parent
+            spacing: Theme.paddingLarge
+
+            Button {
+                text: qsTr("Cancel")
+                onClicked: {
+                    console.log("[DEBUG] Cancel clicked")
+                    page.selectionMode = false
+                    page.selectedVerses = []
+                }
+            }
+
+            Button {
+                text: qsTr("Copy (%1)").arg(page.selectedVerses.length)
+                enabled: page.selectedVerses.length > 0
+                onClicked: {
+                    console.log("[DEBUG] Copy clicked. Selected verses count:", page.selectedVerses.length)
+                    var sorted = page.selectedVerses.slice().sort(function(a, b){ return a - b })
+                    var vStart = sorted[0]
+                    var vEnd = sorted[sorted.length - 1]
+
+                    var textToCopy = bibleManager.formatVersesForClipboard(
+                        confModule.value,
+                        selectedBookId,
+                        selectedBookName,
+                        selectedChapter,
+                        vStart,
+                        vEnd,
+                        confCopyPlacement.value,
+                        confShowVerseNums.value,
+                        confDelimiter.value,
+                        confRangeDash.value
+                    )
+
+                    Clipboard.text = textToCopy
+                    console.log("[DEBUG] Copied text to clipboard:\n" + textToCopy)
+
+                    page.selectionMode = false
+                    page.selectedVerses = []
+                }
+            }
         }
     }
 
@@ -108,7 +179,6 @@ Page {
         return null
     }
 
-    // Called on fresh passage jump or app load
     function initializeBuffer() {
         if (selectedModule === "" || selectedBookId === "") return
 
@@ -125,34 +195,30 @@ Page {
         var nextData = nextRef ? { bookId: nextRef.bookId, bookName: nextRef.bookName, chapter: nextRef.chapter, verses: bibleManager.getChapterVerses(selectedModule, nextRef.bookId, nextRef.chapter) }
                                : { bookId: "", bookName: "", chapter: 0, verses: [] }
 
-        // Slot 0 = Previous, Slot 1 = Current, Slot 2 = Next
         bufferSlots = [prevData, currData, nextData]
         slideshow.currentIndex = 1
 
         isUpdatingBuffer = false
     }
 
-    // Called after a swipe gesture completes to populate the off-screen slot
     function updateBufferCircular(direction) {
         if (isUpdatingBuffer) return
         isUpdatingBuffer = true
 
-        var activeSlot = slideshow.currentIndex // 0, 1, or 2
+        var activeSlot = slideshow.currentIndex
         var prevSlot = (activeSlot + 2) % 3
         var nextSlot = (activeSlot + 1) % 3
 
-        // Declared once at function top to prevent QML static analyzer warning
         var updated = [bufferSlots[0], bufferSlots[1], bufferSlots[2]]
 
-        // Load new outer boundary in background
-        if (direction > 0) { // Moved Next
+        if (direction > 0) {
             var nextRef = getAdjacentChapterRef(selectedBookId, selectedBookName, selectedChapter, 1)
             var nextData = nextRef ? { bookId: nextRef.bookId, bookName: nextRef.bookName, chapter: nextRef.chapter, verses: bibleManager.getChapterVerses(selectedModule, nextRef.bookId, nextRef.chapter) }
                                    : { bookId: "", bookName: "", chapter: 0, verses: [] }
 
             updated[nextSlot] = nextData
             bufferSlots = updated
-        } else if (direction < 0) { // Moved Previous
+        } else if (direction < 0) {
             var prevRef = getAdjacentChapterRef(selectedBookId, selectedBookName, selectedChapter, -1)
             var prevData = prevRef ? { bookId: prevRef.bookId, bookName: prevRef.bookName, chapter: prevRef.chapter, verses: bibleManager.getChapterVerses(selectedModule, prevRef.bookId, prevRef.chapter) }
                                    : { bookId: "", bookName: "", chapter: 0, verses: [] }
@@ -211,28 +277,40 @@ Page {
         confBookmarks.value = JSON.stringify(list)
     }
 
-    // Formats MyBible Strong's markup variants into clickable QML links
     function formatStrongLinks(rawText) {
         if (!rawText) return ""
 
         var formatted = rawText
 
-        // 1. Matches <S>H7225</S>, <S>G746</S>, or <S>7225</S>
         formatted = formatted.replace(/<S>([HG]?\d+)<\/S>/gi, function(match, code) {
             return ' <a href="strong://' + code + '" style="text-decoration:none;"><font color="' + Theme.highlightColor + '"><sup>' + code + '</sup></font></a>'
         })
 
-        // 2. Matches <w S="H7225">word</w>
         formatted = formatted.replace(/<w\s+S="([HG]?\d+)">([^<]+)<\/w>/gi, function(match, code, word) {
             return word + ' <a href="strong://' + code + '" style="text-decoration:none;"><font color="' + Theme.highlightColor + '"><sup>' + code + '</sup></font></a>'
         })
 
-        // 3. Matches <f>S:H7225</f>
         formatted = formatted.replace(/<f>S:([HG]?\d+)<\/f>/gi, function(match, code) {
             return ' <a href="strong://' + code + '" style="text-decoration:none;"><font color="' + Theme.highlightColor + '"><sup>' + code + '</sup></font></a>'
         })
 
         return formatted
+    }
+
+    function toggleVerseSelection(vNum) {
+        var list = selectedVerses.slice()
+        var idx = list.indexOf(vNum)
+        if (idx >= 0) {
+            list.splice(idx, 1)
+        } else {
+            list.push(vNum)
+        }
+        selectedVerses = list
+        console.log("[DEBUG] Toggled verse:", vNum, "| Currently selected verses:", JSON.stringify(selectedVerses))
+    }
+
+    function isVerseSelected(vNum) {
+        return selectedVerses.indexOf(vNum) >= 0
     }
 
     SlideshowView {
@@ -335,7 +413,7 @@ Page {
                     text: qsTr("Commentary")
                     onClicked: {
                         pageStack.push(Qt.resolvedUrl("CommentaryPage.qml"), {
-                            "selectedBibleModule": page.selectedModule, // Pass active Bible module
+                            "selectedBibleModule": page.selectedModule,
                             "bookId": page.selectedBookId,
                             "bookName": page.selectedBookName,
                             "chapter": page.selectedChapter
@@ -354,9 +432,9 @@ Page {
                 }
 
                 MenuItem {
-                        text: qsTr("Study Notes")
-                        onClicked: pageStack.push(Qt.resolvedUrl("StudyNotesPage.qml"))
-                    }
+                    text: qsTr("Study Notes")
+                    onClicked: pageStack.push(Qt.resolvedUrl("StudyNotesPage.qml"))
+                }
 
                 MenuItem {
                     text: qsTr("Settings")
@@ -402,11 +480,13 @@ Page {
                             property var vData: (modelData && typeof modelData === "object") ? modelData : ({})
                             property bool hasNote: !!(vData && vData.hasFootnote)
                             property bool bookmarked: page.isBookmarked(vData)
+                            property bool isSelected: page.isVerseSelected(vData.verse)
+
+                            highlighted: isSelected || down
 
                             menu: ContextMenu {
                                 id: verseContextMenu
 
-                                // Quick action icon row
                                 Row {
                                     anchors.horizontalCenter: parent.horizontalCenter
                                     spacing: Theme.paddingLarge
@@ -434,10 +514,10 @@ Page {
                                                 page.selectedChapter,
                                                 vNum,
                                                 vNum,
-                                                confRefPlacement.value,
+                                                confCopyPlacement.value,
                                                 confShowVerseNums.value,
                                                 confDelimiter.value,
-                                                "–"
+                                                confRangeDash.value
                                             )
                                             Clipboard.text = formattedStr
                                             verseContextMenu.close()
@@ -475,10 +555,22 @@ Page {
                                         })
                                     }
                                 }
+
+                                MenuItem {
+                                    text: qsTr("Select multiple")
+                                    onClicked: {
+                                        console.log("[DEBUG] 'Select multiple' menu item clicked for verse:", modelData.verse)
+                                        page.selectionMode = true
+                                        page.toggleVerseSelection(modelData.verse)
+                                    }
+                                }
                             }
 
                             onClicked: {
-                                if (verseDelegate.hasNote) {
+                                if (page.selectionMode) {
+                                    console.log("[DEBUG] Verse item tapped while in selectionMode. Verse:", vData.verse)
+                                    page.toggleVerseSelection(vData.verse)
+                                } else if (verseDelegate.hasNote) {
                                     verseDelegate.expanded = !verseDelegate.expanded
                                 }
                             }
@@ -508,21 +600,13 @@ Page {
 
                                         var formattedText = page.formatStrongLinks(verseDelegate.vData.text || "")
 
-                                        // FELSÖKNING: Skriv ut den genererade HTML-texten för vers 1
-                                        if (vNum === 1) {
-                                            console.log("[FirstPage] Formatterad text för vers 1:", formattedText)
-                                        }
-
                                         return vNumFormatted + " " + formattedText
                                     }
 
                                     onLinkActivated: {
                                         var linkStr = link.toString()
-                                        console.log("[FirstPage] LINK ACTIVATED! URL:", linkStr)
-
                                         if (linkStr.indexOf("strong://") === 0) {
                                             var strongCode = linkStr.replace("strong://", "")
-                                            console.log("[FirstPage] Navigating to DictionaryPage with code:", strongCode)
                                             pageStack.push(Qt.resolvedUrl("DictionaryPage.qml"), {
                                                 "initialTopic": strongCode
                                             })

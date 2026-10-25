@@ -101,6 +101,8 @@ public:
                                                  int placementMode, bool showVerseNumbers,
                                                  const QString &delimiter, const QString &rangeDash);
     Q_INVOKABLE QStringList getNoteTopics();
+    Q_INVOKABLE QVariantList getTopicFolders();
+    Q_INVOKABLE QVariantList getNotesForTopic(const QString &topic);
 
 signals:
     void catalogUpdated();

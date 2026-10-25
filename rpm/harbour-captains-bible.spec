@@ -1,7 +1,7 @@
 Name:       harbour-captains-bible
 Summary:    Captain's Bible
 Version:    0.4
-Release:    1
+Release:    2
 License:    LICENSE
 URL:        http://example.org/
 Source0:    %{name}-%{version}.tar.bz2
@@ -40,6 +40,11 @@ desktop-file-install --delete-original \
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
+* Sun Oct 25 2026 Martin Book <martin@fambook.nu> 0.4-2
+- Add folder accordion layout for Study Notes page
+- Implement multi-verse selection and clipboard copying mechanism
+- Fix top bar rendering using high-z overlay for full screen view
+
 * Sat Oct 24 2026 Martin Book <martin@fambook.nu> 0.4-1
 - Added custom SQLite study notes system with topic auto-completion
 - Integrated inline verse notes editor with passage previews

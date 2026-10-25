@@ -2208,6 +2208,53 @@ QStringList BibleManager::getNoteTopics()
     return topics;
 }
 
+QVariantList BibleManager::getTopicFolders()
+{
+    QVariantList folders;
+    QSqlDatabase db = getUserNotesDatabase();
+    if (!db.isOpen()) return folders;
+
+    QSqlQuery q(db);
+    // Hämtar unika ämnen (topics) och räknar antalet anteckningar per ämne
+    if (q.exec("SELECT topic, COUNT(*) as note_count FROM notes GROUP BY topic ORDER BY topic ASC")) {
+        while (q.next()) {
+            QVariantMap map;
+            map["topicName"] = q.value("topic").toString();
+            map["noteCount"] = q.value("note_count").toInt();
+            folders.append(map);
+        }
+    }
+    return folders;
+}
+
+QVariantList BibleManager::getNotesForTopic(const QString &topic)
+{
+    QVariantList notes;
+    QSqlDatabase db = getUserNotesDatabase();
+    if (!db.isOpen()) return notes;
+
+    QSqlQuery q(db);
+    q.prepare("SELECT id, book_id, chapter, verse_start, verse_end, title, body, topic "
+              "FROM notes WHERE topic = :topic ORDER BY id DESC");
+    q.bindValue(":topic", topic);
+
+    if (q.exec()) {
+        while (q.next()) {
+            QVariantMap map;
+            map["id"] = q.value("id").toInt();
+            map["bookId"] = q.value("book_id").toString();
+            map["chapter"] = q.value("chapter").toInt();
+            map["verseStart"] = q.value("verse_start").toInt();
+            map["verseEnd"] = q.value("verse_end").toInt();
+            map["title"] = q.value("title").toString();
+            map["body"] = q.value("body").toString();
+            map["topic"] = q.value("topic").toString();
+            notes.append(map);
+        }
+    }
+    return notes;
+}
+
 void BibleManager::refreshModules()
 {
     emit catalogUpdated();
