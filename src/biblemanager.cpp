@@ -341,12 +341,14 @@ QVariantList BibleManager::getBibleBooks(const QString &moduleName)
 
     while (q.next()) {
         int bookNum = q.value(0).toInt();
-        QString shortName = q.value(1).toString();
-        QString longName = q.value(2).toString();
+        QString shortName = q.value(1).toString().trimmed();
+        QString longName = q.value(2).toString().trimmed();
 
         QVariantMap bookMap;
         bookMap["bookId"] = getOSISBookId(bookNum);
-        bookMap["bookName"] = !longName.trimmed().isEmpty() ? longName : shortName;
+        bookMap["bookName"] = !longName.isEmpty() ? longName : shortName;
+        // NEW: Return the localized module abbreviation (e.g., "1 Mos" for Swedish, "Gen" for English)
+        bookMap["shortBookName"] = !shortName.isEmpty() ? shortName : bookMap["bookName"].toString();
 
         books.append(bookMap);
     }
@@ -2253,6 +2255,32 @@ QVariantList BibleManager::getNotesForTopic(const QString &topic)
         }
     }
     return notes;
+}
+
+QString BibleManager::getShortBookName(const QString &moduleName, const QString &bookId)
+{
+    QSqlDatabase db = getModuleDatabase(moduleName);
+    if (!db.isOpen()) return bookId;
+
+    int bookNum = getMyBibleBookNumber(bookId); // Reverse lookup OSIS -> book_number
+    if (bookNum <= 0) return bookId;
+
+    QSqlQuery q(db);
+    q.prepare("SELECT short_name, long_name FROM books_all WHERE book_number = :num AND is_present = 1");
+    q.bindValue(":num", bookNum);
+
+    if (!q.exec() || !q.next()) {
+        q.prepare("SELECT short_name, long_name FROM books WHERE book_number = :num");
+        q.bindValue(":num", bookNum);
+        if (!q.exec() || !q.next()) return bookId;
+    }
+
+    QString shortName = q.value(0).toString().trimmed();
+    QString longName = q.value(1).toString().trimmed();
+
+    if (!shortName.isEmpty()) return shortName;
+    if (!longName.isEmpty()) return longName;
+    return bookId;
 }
 
 void BibleManager::refreshModules()

@@ -22,6 +22,7 @@ Page {
     ConfigurationValue { id: confShowVerseNums; key: "/apps/harbour-captains-bible/showVerseNums"; defaultValue: true }
     ConfigurationValue { id: confDelimiter; key: "/apps/harbour-captains-bible/refDelimiter"; defaultValue: ":" }
     ConfigurationValue { id: confRangeDash; key: "/apps/harbour-captains-bible/refRangeDash"; defaultValue: "–" }
+    ConfigurationValue { id: confUseShortBookNames; key: "/apps/harbour-captains-bible/useShortBookNames"; defaultValue: false }
 
     // Screen keep-alive setting
     ConfigurationValue {
@@ -77,64 +78,113 @@ Page {
     }
 
     // Reliable Top Action Bar for Multi-Selection Mode
-    Rectangle {
-        id: selectionOverlay
-        width: parent.width
-        height: Theme.itemSizeMedium
-        anchors.top: parent.top
-        color: Theme.highlightBackgroundColor
-        opacity: page.selectionMode ? 0.95 : 0.0
-        visible: opacity > 0
-        z: 100 // Float above all Flickables and Slideshows
+    // Reliable Top Action Bar for Multi-Selection Mode
+        Rectangle {
+            id: selectionOverlay
+            width: parent.width
+            height: Theme.itemSizeMedium + Theme.paddingMedium
+            anchors.top: parent.top
+            color: Theme.highlightBackgroundColor
+            opacity: page.selectionMode ? 0.95 : 0.0
+            visible: opacity > 0
+            z: 100
 
-        Behavior on opacity {
-            FadeAnimation { duration: 200 }
-        }
-
-        Row {
-            anchors.centerIn: parent
-            spacing: Theme.paddingLarge
-
-            Button {
-                text: qsTr("Cancel")
-                onClicked: {
-                    console.log("[DEBUG] Cancel clicked")
-                    page.selectionMode = false
-                    page.selectedVerses = []
-                }
+            Behavior on opacity {
+                FadeAnimation { duration: 200 }
             }
 
-            Button {
-                text: qsTr("Copy (%1)").arg(page.selectedVerses.length)
-                enabled: page.selectedVerses.length > 0
-                onClicked: {
-                    console.log("[DEBUG] Copy clicked. Selected verses count:", page.selectedVerses.length)
-                    var sorted = page.selectedVerses.slice().sort(function(a, b){ return a - b })
-                    var vStart = sorted[0]
-                    var vEnd = sorted[sorted.length - 1]
+            Row {
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: Theme.paddingSmall
+                spacing: Theme.paddingSmall
 
-                    var textToCopy = bibleManager.formatVersesForClipboard(
-                        confModule.value,
-                        selectedBookId,
-                        selectedBookName,
-                        selectedChapter,
-                        vStart,
-                        vEnd,
-                        confCopyPlacement.value,
-                        confShowVerseNums.value,
-                        confDelimiter.value,
-                        confRangeDash.value
-                    )
-
-                    Clipboard.text = textToCopy
-                    console.log("[DEBUG] Copied text to clipboard:\n" + textToCopy)
-
-                    page.selectionMode = false
-                    page.selectedVerses = []
+                Button {
+                    preferredWidth: Math.min(implicitWidth, (selectionOverlay.width - 4 * Theme.paddingSmall) / 3)
+                    text: qsTr("Cancel")
+                    onClicked: {
+                        page.selectionMode = false
+                        page.selectedVerses = []
+                    }
                 }
+
+                Button {
+                                preferredWidth: Math.min(implicitWidth, (selectionOverlay.width - 4 * Theme.paddingSmall) / 3)
+                                text: qsTr("Copy (%1)").arg(page.selectedVerses.length)
+                                enabled: page.selectedVerses.length > 0
+                                onClicked: {
+                                    var sorted = page.selectedVerses.slice().sort(function(a, b){ return a - b })
+                                    var vStart = sorted[0]
+                                    var vEnd = sorted[sorted.length - 1]
+
+                                    // Fetch localized short name (e.g. "1 Mos") or full name (e.g. "Första Moseboken")
+                                    var displayBookName = confUseShortBookNames.value
+                                                           ? bibleManager.getShortBookName(confModule.value, selectedBookId)
+                                                           : selectedBookName
+
+                                    var textToCopy = bibleManager.formatVersesForClipboard(
+                                        confModule.value,
+                                        selectedBookId,
+                                        displayBookName,
+                                        selectedChapter,
+                                        vStart,
+                                        vEnd,
+                                        confCopyPlacement.value,
+                                        confShowVerseNums.value,
+                                        confDelimiter.value,
+                                        confRangeDash.value
+                                    )
+
+                                    Clipboard.text = textToCopy
+                                    page.selectionMode = false
+                                    page.selectedVerses = []
+                                }
+                            }
+
+                            Button {
+                                preferredWidth: Math.min(implicitWidth, (selectionOverlay.width - 4 * Theme.paddingSmall) / 3)
+                                text: qsTr("Create note")
+                                enabled: page.selectedVerses.length > 0
+                                onClicked: {
+                                    var sorted = page.selectedVerses.slice().sort(function(a, b){ return a - b })
+                                    var vStart = sorted[0]
+                                    var vEnd = sorted[sorted.length - 1]
+
+                                    // Fetch localized short name (e.g. "1 Mos") or full name (e.g. "Första Moseboken")
+                                    var displayBookName = confUseShortBookNames.value
+                                                           ? bibleManager.getShortBookName(confModule.value, selectedBookId)
+                                                           : selectedBookName
+
+                                    var formattedText = bibleManager.formatVersesForClipboard(
+                                        confModule.value,
+                                        selectedBookId,
+                                        displayBookName,
+                                        selectedChapter,
+                                        vStart,
+                                        vEnd,
+                                        confCopyPlacement.value,
+                                        confShowVerseNums.value,
+                                        confDelimiter.value,
+                                        confRangeDash.value
+                                    )
+
+                                    var sep = confDelimiter.value !== "" ? confDelimiter.value : ":"
+                                    var dash = confRangeDash.value !== "" ? confRangeDash.value : "–"
+                                    var refTitle = (vStart === vEnd)
+                                                   ? (displayBookName + " " + selectedChapter + sep + vStart)
+                                                   : (displayBookName + " " + selectedChapter + sep + vStart + dash + vEnd)
+
+                                    pageStack.push(Qt.resolvedUrl("NoteEditorPage.qml"), {
+                                        "initialTitle": refTitle,
+                                        "initialBody": formattedText
+                                    })
+
+                                    page.selectionMode = false
+                                    page.selectedVerses = []
+                                }
+                            }
             }
         }
-    }
 
     Component.onCompleted: {
         loadBibles()
@@ -507,10 +557,11 @@ Page {
                                         icon.source: "image://theme/icon-m-clipboard"
                                         onClicked: {
                                             var vNum = verseDelegate.vData.verse
+                                            var displayBookName = confUseShortBookNames.value ? page.selectedBookId : page.selectedBookName
                                             var formattedStr = bibleManager.formatVersesForClipboard(
                                                 page.selectedModule,
                                                 page.selectedBookId,
-                                                page.selectedBookName,
+                                                displayBookName,
                                                 page.selectedChapter,
                                                 vNum,
                                                 vNum,
@@ -594,11 +645,23 @@ Page {
                                         if (!verseDelegate.vData || typeof verseDelegate.vData.verse === "undefined") return ""
 
                                         var vNum = verseDelegate.vData.verse
+                                        var rawText = verseDelegate.vData.text || ""
+
+                                        // === DEBUG LOGGING START ===
+                                        // Log raw verse text and footnote payload if footnotes/cross-refs are present
+                                        if (verseDelegate.hasNote || rawText.indexOf("<f>") !== -1 || rawText.indexOf("<a") !== -1 || rawText.indexOf("ⓐ") !== -1) {
+                                            console.log("[DEBUG CrossRef] Verse " + vNum + " RAW TEXT:", rawText)
+                                            if (verseDelegate.vData.footnote) {
+                                                console.log("[DEBUG CrossRef] Verse " + vNum + " FOOTNOTE/REF DATA:", verseDelegate.vData.footnote)
+                                            }
+                                        }
+                                        // === DEBUG LOGGING END ===
+
                                         var vNumFormatted = verseDelegate.hasNote
                                                             ? "<u><b>" + vNum + "</b></u>"
                                                             : "<b>" + vNum + "</b>"
 
-                                        var formattedText = page.formatStrongLinks(verseDelegate.vData.text || "")
+                                        var formattedText = page.formatStrongLinks(rawText)
 
                                         return vNumFormatted + " " + formattedText
                                     }

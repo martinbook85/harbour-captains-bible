@@ -13,6 +13,10 @@ Page {
     property int verseEnd: 0
     property var existingNote: null
 
+    // NEW: Properties passed when creating a note from multi-verse selection
+    property string initialTitle: ""
+    property string initialBody: ""
+
     property string passagePreviewText: ""
     property var availableTopics: []
 
@@ -94,59 +98,64 @@ Page {
 
             // Topic / Folder Field
             Column {
-                width: parent.width - (2 * Theme.horizontalPageMargin)
-                anchors.horizontalCenter: parent.horizontalCenter
+                     width: parent.width - (2 * Theme.horizontalPageMargin)
+                     anchors.horizontalCenter: parent.horizontalCenter
 
-                TextField {
-                    id: topicField
-                    width: parent.width
-                    label: qsTr("Topic / Folder")
-                    placeholderText: qsTr("Create or choose topic")
+                     TextField {
+                         id: topicField
+                         width: parent.width
+                         label: qsTr("Topic / Folder")
+                         placeholderText: qsTr("Create or choose topic")
 
-                    // THIS IS THE UPDATED TEXT PROPERTY
-                    text: (existingNote && existingNote.topic)
-                          ? existingNote.topic
-                          : (bookId !== "" ? "Verse Notes" : "")
-                }
+                         text: (existingNote && existingNote.topic)
+                               ? existingNote.topic
+                               : ""
+                     }
 
-                Column {
-                    width: parent.width
-                    visible: topicField.text.length > 0 && topicField.focus
+                     Column {
+                         width: parent.width
+                         // Shows immediately on focus, even if text input is empty
+                         visible: topicField.focus && availableTopics.length > 0
 
-                    Repeater {
-                        model: {
-                            var query = topicField.text.toLowerCase()
-                            var matches = []
-                            for (var i = 0; i < availableTopics.length; i++) {
-                                var top = availableTopics[i]
-                                if (top.toLowerCase().indexOf(query) >= 0 && top.toLowerCase() !== query) {
-                                    matches.push(top)
-                                }
-                            }
-                            return matches.slice(0, 4)
-                        }
+                         Repeater {
+                             model: {
+                                 var query = topicField.text.trim().toLowerCase()
+                                 // If text field is empty, show top 6 existing topics directly
+                                 if (query === "") {
+                                     return availableTopics.slice(0, 6)
+                                 }
+                                 // Otherwise, filter topics by query
+                                 var matches = []
+                                 for (var i = 0; i < availableTopics.length; i++) {
+                                     var top = availableTopics[i]
+                                     if (top.toLowerCase().indexOf(query) >= 0) {
+                                         matches.push(top)
+                                     }
+                                 }
+                                 return matches.slice(0, 6)
+                             }
 
-                        delegate: BackgroundItem {
-                            width: parent.width
-                            height: Theme.itemSizeExtraSmall
+                             delegate: BackgroundItem {
+                                 width: parent.width
+                                 height: Theme.itemSizeExtraSmall
 
-                            Label {
-                                anchors.verticalCenter: parent.verticalCenter
-                                anchors.left: parent.left
-                                anchors.leftMargin: Theme.paddingMedium
-                                text: modelData
-                                color: Theme.highlightColor
-                                font.pixelSize: Theme.fontSizeSmall
-                            }
+                                 Label {
+                                     anchors.verticalCenter: parent.verticalCenter
+                                     anchors.left: parent.left
+                                     anchors.leftMargin: Theme.paddingMedium
+                                     text: modelData
+                                     color: Theme.highlightColor
+                                     font.pixelSize: Theme.fontSizeSmall
+                                 }
 
-                            onClicked: {
-                                topicField.text = modelData
-                                topicField.focus = false
-                            }
-                        }
-                    }
-                }
-            }
+                                 onClicked: {
+                                     topicField.text = modelData
+                                     topicField.focus = false
+                                 }
+                             }
+                         }
+                     }
+                 }
 
             TextField {
                 id: titleField
@@ -155,7 +164,9 @@ Page {
                 label: qsTr("Note Title")
                 text: (existingNote && existingNote.title)
                       ? existingNote.title
-                      : (bookName !== "" ? (bookName + " " + chapter + ":" + (verseStart === verseEnd ? verseStart : (verseStart + "–" + verseEnd))) : "")
+                      : (initialTitle !== ""
+                         ? initialTitle
+                         : (bookName !== "" ? (bookName + " " + chapter + ":" + (verseStart === verseEnd ? verseStart : (verseStart + "–" + verseEnd))) : ""))
                 placeholderText: qsTr("General Note Title")
             }
 
@@ -165,7 +176,9 @@ Page {
                 anchors.horizontalCenter: parent.horizontalCenter
                 label: qsTr("Study Note")
                 placeholderText: qsTr("Write your personal notes or comments here...")
-                text: (existingNote && existingNote.body) ? existingNote.body : ""
+                text: (existingNote && existingNote.body)
+                      ? existingNote.body
+                      : (initialBody !== "" ? initialBody : "")
                 height: Math.max(implicitHeight, Theme.itemSizeHuge * 2)
             }
 

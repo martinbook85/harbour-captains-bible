@@ -6,9 +6,10 @@ Page {
     id: settingsPage
     allowedOrientations: Orientation.All
 
+    // Korrigerad nyckel: Matchar /copyPlacement i FirstPage.qml!
     ConfigurationValue {
-        id: confRefPlacement
-        key: "/apps/harbour-captains-bible/refPlacement"
+        id: confCopyPlacement
+        key: "/apps/harbour-captains-bible/copyPlacement"
         defaultValue: 0 // 0 = Header, 1 = Footer
     }
 
@@ -30,6 +31,12 @@ Page {
         defaultValue: false
     }
 
+    ConfigurationValue {
+            id: confUseShortBookNames
+            key: "/apps/harbour-captains-bible/useShortBookNames"
+            defaultValue: false
+        }
+
     SilicaFlickable {
         anchors.fill: parent
         contentHeight: contentColumn.height + Theme.paddingLarge
@@ -50,12 +57,16 @@ Page {
             ComboBox {
                 width: parent.width
                 label: qsTr("Reference Placement")
-                currentIndex: confRefPlacement.value
+                currentIndex: confCopyPlacement.value
                 menu: ContextMenu {
                     MenuItem { text: qsTr("Before text (Header: John 3:16)") }
                     MenuItem { text: qsTr("After text (Footer: — John 3:16)") }
                 }
-                onCurrentIndexChanged: confRefPlacement.value = currentIndex
+                onCurrentIndexChanged: {
+                    if (confCopyPlacement.value !== currentIndex) {
+                        confCopyPlacement.value = currentIndex
+                    }
+                }
             }
 
             ComboBox {
@@ -66,7 +77,20 @@ Page {
                     MenuItem { text: qsTr("Colon (John 3:16 - English/Intl)") }
                     MenuItem { text: qsTr("Comma (Joh 3,16 - European)") }
                 }
-                onCurrentIndexChanged: confDelimiter.value = (currentIndex === 1 ? "," : ":")
+                onCurrentIndexChanged: {
+                    var newDelim = (currentIndex === 1 ? "," : ":")
+                    if (confDelimiter.value !== newDelim) {
+                        confDelimiter.value = newDelim
+                    }
+                }
+            }
+
+            TextSwitch {
+                width: parent.width
+                text: qsTr("Use short book names")
+                description: qsTr("Use abbreviated book names (e.g. Joh instead of John) when copying and creating notes")
+                checked: confUseShortBookNames.value
+                onCheckedChanged: confUseShortBookNames.value = checked
             }
 
             TextSwitch {

@@ -103,6 +103,7 @@ public:
     Q_INVOKABLE QStringList getNoteTopics();
     Q_INVOKABLE QVariantList getTopicFolders();
     Q_INVOKABLE QVariantList getNotesForTopic(const QString &topic);
+    Q_INVOKABLE QString getShortBookName(const QString &moduleName, const QString &bookId);
 
 signals:
     void catalogUpdated();

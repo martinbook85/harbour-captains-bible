@@ -190,6 +190,10 @@
         <source>Select multiple</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Create note</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ImagePage</name>
@@ -495,6 +499,14 @@
     </message>
     <message>
         <source>Prevents the display from turning off while reading scripture</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use short book names</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use abbreviated book names (e.g. Joh instead of John) when copying and creating notes</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
