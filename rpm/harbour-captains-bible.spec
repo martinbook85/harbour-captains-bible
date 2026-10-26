@@ -1,7 +1,7 @@
 Name:       harbour-captains-bible
 Summary:    Captain's Bible
 Version:    0.4
-Release:    2
+Release:    3
 License:    LICENSE
 URL:        http://example.org/
 Source0:    %{name}-%{version}.tar.bz2
@@ -40,6 +40,9 @@ desktop-file-install --delete-original \
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
+* Mon Oct 26 2026 Martin Book <martin@fambook.nu> 0.4-3
+- Performance improvement for copy verse and create note from multiple verses
+
 * Sun Oct 25 2026 Martin Book <martin@fambook.nu> 0.4-2
 - Add folder accordion layout for Study Notes page
 - Implement multi-verse selection and clipboard copying mechanism
