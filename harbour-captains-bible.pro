@@ -45,6 +45,7 @@ DISTFILES += \
     qml/pages/ImagePage.qml \
     qml/pages/MapPage.qml \
     qml/pages/NoteEditorPage.qml \
+    qml/pages/RibbonIcon.qml \
     qml/pages/SearchPage.qml \
     qml/pages/SearchResultChapterPage.qml \
     qml/pages/SelectCommentaryDialog.qml \

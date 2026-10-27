@@ -2,6 +2,7 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Nemo.Configuration 1.0
 import Nemo.KeepAlive 1.2
+import QtFeedback 5.0
 
 Page {
     id: page
@@ -16,6 +17,12 @@ Page {
     // Persistent bookmarks storage
     ConfigurationValue { id: confBookmarks; key: "/apps/harbour-captains-bible/bookmarks"; defaultValue: "[]" }
     ConfigurationValue { id: confTargetVerse; key: "/apps/harbour-captains-bible/targetVerse"; defaultValue: 0 }
+
+    // Persistent Ribbon Bookmarks (Läsband) storage
+    // Format: "bookId|bookName|chapter"
+    ConfigurationValue { id: confRibbon1; key: "/apps/harbour-captains-bible/ribbon1"; defaultValue: "" }
+    ConfigurationValue { id: confRibbon2; key: "/apps/harbour-captains-bible/ribbon2"; defaultValue: "" }
+    ConfigurationValue { id: confRibbon3; key: "/apps/harbour-captains-bible/ribbon3"; defaultValue: "" }
 
     // Clipboard formatting settings
     ConfigurationValue { id: confCopyPlacement; key: "/apps/harbour-captains-bible/copyPlacement"; defaultValue: 0 }
@@ -35,6 +42,16 @@ Page {
         // Prevents screen from blanking when setting is active AND page is active
         preventBlanking: confKeepScreenOn.value && page.status === PageStatus.Active
     }
+
+    HapticsEffect {
+            id: buttonClickHaptic
+            attackIntensity: 0.0
+            attackTime: 0
+            intensity: 1.0
+            duration: 50
+            fadeIntensity: 0.0
+            fadeTime: 0
+        }
 
     property string selectedModule: confModule.value
     property string selectedBookId: confBookId.value
@@ -77,114 +94,131 @@ Page {
         }
     }
 
-    // Reliable Top Action Bar for Multi-Selection Mode
-    // Reliable Top Action Bar for Multi-Selection Mode
-        Rectangle {
-            id: selectionOverlay
-            width: parent.width
-            height: Theme.itemSizeMedium + Theme.paddingMedium
-            anchors.top: parent.top
-            color: Theme.highlightBackgroundColor
-            opacity: page.selectionMode ? 0.95 : 0.0
-            visible: opacity > 0
-            z: 100
+    // Ribbon Bookmark Helpers
+    function saveRibbon(confRibbon) {
+        if (!confRibbon) return
+        var ribbonVal = selectedBookId + "|" + selectedBookName + "|" + selectedChapter
+        confRibbon.value = ribbonVal
+        buttonClickHaptic.start() // Trigger short tactile vibration
+        console.log("[DEBUG] Ribbon placed:", ribbonVal)
+    }
 
-            Behavior on opacity {
-                FadeAnimation { duration: 200 }
+    function jumpToRibbon(confRibbon) {
+        if (!confRibbon || confRibbon.value === "") return
+        var parts = confRibbon.value.split("|")
+        if (parts.length >= 3) {
+            selectedBookId = parts[0]
+            selectedBookName = parts[1]
+            selectedChapter = parseInt(parts[2])
+            initializeBuffer()
+        }
+    }
+
+    // Reliable Top Action Bar for Multi-Selection Mode
+    Rectangle {
+        id: selectionOverlay
+        width: parent.width
+        height: Theme.itemSizeMedium + Theme.paddingMedium
+        anchors.top: parent.top
+        color: Theme.highlightBackgroundColor
+        opacity: page.selectionMode ? 0.95 : 0.0
+        visible: opacity > 0
+        z: 100
+
+        Behavior on opacity {
+            FadeAnimation { duration: 200 }
+        }
+
+        Row {
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: Theme.paddingSmall
+            spacing: Theme.paddingSmall
+
+            Button {
+                preferredWidth: Math.min(implicitWidth, (selectionOverlay.width - 4 * Theme.paddingSmall) / 3)
+                text: qsTr("Cancel")
+                onClicked: {
+                    page.selectionMode = false
+                    page.selectedVerses = []
+                }
             }
 
-            Row {
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.bottom: parent.bottom
-                anchors.bottomMargin: Theme.paddingSmall
-                spacing: Theme.paddingSmall
+            Button {
+                preferredWidth: Math.min(implicitWidth, (selectionOverlay.width - 4 * Theme.paddingSmall) / 3)
+                text: qsTr("Copy (%1)").arg(page.selectedVerses.length)
+                enabled: page.selectedVerses.length > 0
+                onClicked: {
+                    var sorted = page.selectedVerses.slice().sort(function(a, b){ return a - b })
+                    var vStart = sorted[0]
+                    var vEnd = sorted[sorted.length - 1]
 
-                Button {
-                    preferredWidth: Math.min(implicitWidth, (selectionOverlay.width - 4 * Theme.paddingSmall) / 3)
-                    text: qsTr("Cancel")
-                    onClicked: {
-                        page.selectionMode = false
-                        page.selectedVerses = []
-                    }
+                    var displayBookName = confUseShortBookNames.value
+                                           ? bibleManager.getShortBookName(confModule.value, selectedBookId)
+                                           : selectedBookName
+
+                    var textToCopy = bibleManager.formatVersesForClipboard(
+                        confModule.value,
+                        selectedBookId,
+                        displayBookName,
+                        selectedChapter,
+                        vStart,
+                        vEnd,
+                        confCopyPlacement.value,
+                        confShowVerseNums.value,
+                        confDelimiter.value,
+                        confRangeDash.value
+                    )
+
+                    Clipboard.text = textToCopy
+                    page.selectionMode = false
+                    page.selectedVerses = []
                 }
+            }
 
-                Button {
-                                preferredWidth: Math.min(implicitWidth, (selectionOverlay.width - 4 * Theme.paddingSmall) / 3)
-                                text: qsTr("Copy (%1)").arg(page.selectedVerses.length)
-                                enabled: page.selectedVerses.length > 0
-                                onClicked: {
-                                    var sorted = page.selectedVerses.slice().sort(function(a, b){ return a - b })
-                                    var vStart = sorted[0]
-                                    var vEnd = sorted[sorted.length - 1]
+            Button {
+                preferredWidth: Math.min(implicitWidth, (selectionOverlay.width - 4 * Theme.paddingSmall) / 3)
+                text: qsTr("Create note")
+                enabled: page.selectedVerses.length > 0
+                onClicked: {
+                    var sorted = page.selectedVerses.slice().sort(function(a, b){ return a - b })
+                    var vStart = sorted[0]
+                    var vEnd = sorted[sorted.length - 1]
 
-                                    // Fetch localized short name (e.g. "1 Mos") or full name (e.g. "Första Moseboken")
-                                    var displayBookName = confUseShortBookNames.value
-                                                           ? bibleManager.getShortBookName(confModule.value, selectedBookId)
-                                                           : selectedBookName
+                    var displayBookName = confUseShortBookNames.value
+                                           ? bibleManager.getShortBookName(confModule.value, selectedBookId)
+                                           : selectedBookName
 
-                                    var textToCopy = bibleManager.formatVersesForClipboard(
-                                        confModule.value,
-                                        selectedBookId,
-                                        displayBookName,
-                                        selectedChapter,
-                                        vStart,
-                                        vEnd,
-                                        confCopyPlacement.value,
-                                        confShowVerseNums.value,
-                                        confDelimiter.value,
-                                        confRangeDash.value
-                                    )
+                    var formattedText = bibleManager.formatVersesForClipboard(
+                        confModule.value,
+                        selectedBookId,
+                        displayBookName,
+                        selectedChapter,
+                        vStart,
+                        vEnd,
+                        confCopyPlacement.value,
+                        confShowVerseNums.value,
+                        confDelimiter.value,
+                        confRangeDash.value
+                    )
 
-                                    Clipboard.text = textToCopy
-                                    page.selectionMode = false
-                                    page.selectedVerses = []
-                                }
-                            }
+                    var sep = confDelimiter.value !== "" ? confDelimiter.value : ":"
+                    var dash = confRangeDash.value !== "" ? confRangeDash.value : "–"
+                    var refTitle = (vStart === vEnd)
+                                   ? (displayBookName + " " + selectedChapter + sep + vStart)
+                                   : (displayBookName + " " + selectedChapter + sep + vStart + dash + vEnd)
 
-                            Button {
-                                preferredWidth: Math.min(implicitWidth, (selectionOverlay.width - 4 * Theme.paddingSmall) / 3)
-                                text: qsTr("Create note")
-                                enabled: page.selectedVerses.length > 0
-                                onClicked: {
-                                    var sorted = page.selectedVerses.slice().sort(function(a, b){ return a - b })
-                                    var vStart = sorted[0]
-                                    var vEnd = sorted[sorted.length - 1]
+                    pageStack.push(Qt.resolvedUrl("NoteEditorPage.qml"), {
+                        "initialTitle": refTitle,
+                        "initialBody": formattedText
+                    })
 
-                                    // Fetch localized short name (e.g. "1 Mos") or full name (e.g. "Första Moseboken")
-                                    var displayBookName = confUseShortBookNames.value
-                                                           ? bibleManager.getShortBookName(confModule.value, selectedBookId)
-                                                           : selectedBookName
-
-                                    var formattedText = bibleManager.formatVersesForClipboard(
-                                        confModule.value,
-                                        selectedBookId,
-                                        displayBookName,
-                                        selectedChapter,
-                                        vStart,
-                                        vEnd,
-                                        confCopyPlacement.value,
-                                        confShowVerseNums.value,
-                                        confDelimiter.value,
-                                        confRangeDash.value
-                                    )
-
-                                    var sep = confDelimiter.value !== "" ? confDelimiter.value : ":"
-                                    var dash = confRangeDash.value !== "" ? confRangeDash.value : "–"
-                                    var refTitle = (vStart === vEnd)
-                                                   ? (displayBookName + " " + selectedChapter + sep + vStart)
-                                                   : (displayBookName + " " + selectedChapter + sep + vStart + dash + vEnd)
-
-                                    pageStack.push(Qt.resolvedUrl("NoteEditorPage.qml"), {
-                                        "initialTitle": refTitle,
-                                        "initialBody": formattedText
-                                    })
-
-                                    page.selectionMode = false
-                                    page.selectedVerses = []
-                                }
-                            }
+                    page.selectionMode = false
+                    page.selectedVerses = []
+                }
             }
         }
+    }
 
     Component.onCompleted: {
         loadBibles()
@@ -498,9 +532,55 @@ Page {
                 spacing: Theme.paddingMedium
 
                 PageHeader {
+                    id: pageHeader
                     title: pageData.bookName !== ""
                            ? (pageData.bookName + " " + pageData.chapter)
                            : qsTr("Captain's Bible")
+
+                    extraContent.children: [
+                        Row {
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.left: parent.left
+                            anchors.leftMargin: Theme.horizontalPageMargin
+                            spacing: Theme.paddingLarge // Increased spacing between ribbons
+
+                            Repeater {
+                                model: [
+                                    { id: 1, conf: confRibbon1, color: "#E63946" }, // Red
+                                    { id: 2, conf: confRibbon2, color: "#457B9D" }, // Blue
+                                    { id: 3, conf: confRibbon3, color: "#2A9D8F" }  // Green
+                                ]
+
+                                delegate: BackgroundItem {
+                                    id: ribbonItemContainer
+                                    width: Theme.iconSizeSmall
+                                    height: Theme.iconSizeMedium
+
+                                    RibbonIcon {
+                                        id: rIcon
+                                        anchors.centerIn: parent
+                                        ribbonColor: modelData.color
+                                        isSet: modelData.conf.value !== ""
+                                        labelText: modelData.id.toString()
+                                    }
+
+                                    onClicked: {
+                                        if (modelData.conf.value !== "") {
+                                            page.jumpToRibbon(modelData.conf)
+                                        } else {
+                                            page.saveRibbon(modelData.conf)
+                                            rIcon.flash()
+                                        }
+                                    }
+
+                                    onPressAndHold: {
+                                        page.saveRibbon(modelData.conf)
+                                        rIcon.flash()
+                                    }
+                                }
+                            }
+                        }
+                    ]
                 }
 
                 Label {
@@ -647,15 +727,12 @@ Page {
                                         var vNum = verseDelegate.vData.verse
                                         var rawText = verseDelegate.vData.text || ""
 
-                                        // === DEBUG LOGGING START ===
-                                        // Log raw verse text and footnote payload if footnotes/cross-refs are present
                                         if (verseDelegate.hasNote || rawText.indexOf("<f>") !== -1 || rawText.indexOf("<a") !== -1 || rawText.indexOf("ⓐ") !== -1) {
                                             console.log("[DEBUG CrossRef] Verse " + vNum + " RAW TEXT:", rawText)
                                             if (verseDelegate.vData.footnote) {
                                                 console.log("[DEBUG CrossRef] Verse " + vNum + " FOOTNOTE/REF DATA:", verseDelegate.vData.footnote)
                                             }
                                         }
-                                        // === DEBUG LOGGING END ===
 
                                         var vNumFormatted = verseDelegate.hasNote
                                                             ? "<u><b>" + vNum + "</b></u>"
