@@ -1,49 +1,175 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Nemo.Configuration 1.0
+import "../pages"
 
 CoverBackground {
     id: cover
 
+    // Configuration Keys
+    ConfigurationValue { id: confModule; key: "/apps/harbour-captains-bible/selectedModule"; defaultValue: "" }
+    ConfigurationValue { id: confCoverMode; key: "/apps/harbour-captains-bible/coverMode"; defaultValue: 0 } // 0: VOTD, 1: Bookmarks, 2: Ribbons, 3: Both
+    ConfigurationValue { id: confRibbonCount; key: "/apps/harbour-captains-bible/ribbonCount"; defaultValue: 3 }
+
+    // Ribbons Configuration Keys (1 to 8)
+    ConfigurationValue { id: confRibbon1; key: "/apps/harbour-captains-bible/ribbon1"; defaultValue: "" }
+    ConfigurationValue { id: confRibbon2; key: "/apps/harbour-captains-bible/ribbon2"; defaultValue: "" }
+    ConfigurationValue { id: confRibbon3; key: "/apps/harbour-captains-bible/ribbon3"; defaultValue: "" }
+    ConfigurationValue { id: confRibbon4; key: "/apps/harbour-captains-bible/ribbon4"; defaultValue: "" }
+    ConfigurationValue { id: confRibbon5; key: "/apps/harbour-captains-bible/ribbon5"; defaultValue: "" }
+    ConfigurationValue { id: confRibbon6; key: "/apps/harbour-captains-bible/ribbon6"; defaultValue: "" }
+    ConfigurationValue { id: confRibbon7; key: "/apps/harbour-captains-bible/ribbon7"; defaultValue: "" }
+    ConfigurationValue { id: confRibbon8; key: "/apps/harbour-captains-bible/ribbon8"; defaultValue: "" }
+
     ConfigurationValue {
-        id: confModule
-        key: "/apps/harbour-captains-bible/selectedModule"
-        defaultValue: ""
+        id: confBookmarks
+        key: "/apps/harbour-captains-bible/bookmarks"
+        defaultValue: "[]"
     }
 
+    // Navigation & Data Properties
     property int daysOffset: 0
-    property string verseRef: ""
-    property string verseText: qsTr("Loading...")
+    property int currentListIndex: 0
+    property var coverItems: []
+    property var activeRibbonConfs: [confRibbon1, confRibbon2, confRibbon3, confRibbon4, confRibbon5, confRibbon6, confRibbon7, confRibbon8]
+    property var ribbonColors: ["#E63946", "#457B9D", "#2A9D8F", "#E9C46A", "#F4A261", "#9C27B0", "#00BCD4", "#E91E63"]
 
-    // Dynamic date calculation based on offset
+    // Dynamic date calculation for Mode 0 (VOTD)
     property string currentDateStr: {
         var d = new Date()
         d.setDate(d.getDate() + daysOffset)
         return Qt.formatDate(d, "d MMMM yyyy")
     }
 
-    function updateContent(offset) {
+    // Deep-linking helper to navigate inside the app
+    function openCurrentPassage() {
+        var item = coverItems.length > 0 ? coverItems[currentListIndex] : null
+        if (!item) return
+
+        var targetBookId = item.bookId || "Gen"
+        var targetBookName = item.bookName || ""
+        var targetChapter = item.chapter || 1
+        var targetVerse = item.verse || 1
+
+        // Resolve display book name if missing
+        if ((!targetBookName || targetBookName === "") && typeof bibleManager !== "undefined" && confModule.value !== "") {
+            targetBookName = bibleManager.getBookName(confModule.value, targetBookId) || targetBookId
+        }
+
+        // Use global appWindow reference directly to activate app and trigger navigation
+        if (typeof appWindow !== "undefined" && appWindow) {
+            appWindow.activate()
+            if (typeof appWindow.jumpToPassage === "function") {
+                appWindow.jumpToPassage(targetBookId, targetBookName, targetChapter, targetVerse)
+            }
+        }
+    }
+
+    // Load active items depending on mode
+    function loadCoverData() {
+        var mode = confCoverMode.value
+        if (mode === 0) {
+            updateVotd(daysOffset)
+            return
+        }
+
+        var list = []
+        var i = 0
+
+        // 1. Load User Bookmarks from JSON (Mode 1 & Mode 3)
+        if (mode === 1 || mode === 3) {
+            var parsedBms = []
+            try {
+                parsedBms = JSON.parse(confBookmarks.value)
+            } catch (e) {
+                parsedBms = []
+            }
+
+            for (i = 0; i < parsedBms.length; i++) {
+                var bm = parsedBms[i]
+                var bId = bm.bookId || "Gen"
+                var bName = bm.bookName || bId
+                var ch = bm.chapter !== undefined ? bm.chapter : 1
+                var v = bm.verse !== undefined ? bm.verse : 1
+                var txt = bm.text || ""
+
+                list.push({
+                    type: "bookmark",
+                    ref: bName + " " + ch + (v > 0 ? ":" + v : ""),
+                    text: txt,
+                    bookId: bId,
+                    bookName: bName,
+                    chapter: parseInt(ch),
+                    verse: parseInt(v)
+                })
+            }
+        }
+
+        // 2. Load Active Ribbons (Mode 2 & Mode 3)
+        if (mode === 2 || mode === 3) {
+            var count = Math.min(Math.max(1, confRibbonCount.value), 8)
+            for (i = 0; i < count; i++) {
+                var conf = activeRibbonConfs[i]
+                if (conf && conf.value && conf.value !== "") {
+                    var parts = conf.value.split("|") // Format: "bookId|bookName|chapter"
+                    if (parts.length >= 3) {
+                        list.push({
+                            type: "ribbon",
+                            id: i + 1,
+                            color: ribbonColors[i],
+                            ref: parts[1] + " " + parts[2], // e.g. "1 Kor 10"
+                            bookId: parts[0],
+                            bookName: parts[1],
+                            chapter: parseInt(parts[2]),
+                            verse: 1
+                        })
+                    }
+                }
+            }
+        }
+
+        coverItems = list
+        if (currentListIndex >= coverItems.length) {
+            currentListIndex = 0
+        }
+    }
+
+    function updateVotd(offset) {
+        daysOffset = offset
         var modName = confModule.value
         if (typeof bibleManager !== "undefined" && modName && modName.length > 0) {
-            daysOffset = offset;
-            var votd = bibleManager.getVerseByOffset(modName, daysOffset);
-
+            var votd = bibleManager.getVerseByOffset(modName, daysOffset)
             if (votd && (votd.reference || votd.text)) {
-                verseRef = votd.reference || qsTr("Verse of the Day");
-                verseText = votd.text || votd.content || votd.verseText || qsTr("No verse text available for this date.");
+                var bId = votd.bookId || "Gen"
+                var bName = votd.bookName || (typeof bibleManager.getBookName === "function" ? bibleManager.getBookName(modName, bId) : bId)
+                var ch = votd.chapter || 1
+                var v = votd.verse || 1
+
+                coverItems = [{
+                    type: "votd",
+                    ref: votd.reference || (bName + " " + ch + ":" + v),
+                    text: votd.text || votd.content || votd.verseText || qsTr("No verse text available."),
+                    bookId: bId,
+                    bookName: bName,
+                    chapter: parseInt(ch),
+                    verse: parseInt(v)
+                }]
             } else {
-                verseRef = qsTr("Verse of the Day");
-                verseText = qsTr("No verse available.");
+                coverItems = [{ type: "votd", ref: qsTr("Verse of the Day"), text: qsTr("No verse available.") }]
             }
         } else {
-            verseRef = qsTr("Captain's Bible");
-            verseText = qsTr("Select a Bible translation from the menu to activate Verse of the Day.");
+            coverItems = [{ type: "votd", ref: qsTr("Captain's Bible"), text: qsTr("Select a Bible translation from the menu to activate Verse of the Day.") }]
         }
+        currentListIndex = 0
+    }
+
+    Component.onCompleted: {
+        loadCoverData()
     }
 
     onStatusChanged: {
         if (status === Cover.Active) {
-            updateContent(0);
+            loadCoverData()
         }
     }
 
@@ -62,11 +188,11 @@ CoverBackground {
         anchors {
             fill: parent
             margins: Theme.paddingMedium
-            // Reserve exact clearance for CoverActionList at the bottom
             bottomMargin: Theme.itemSizeNormal
         }
         spacing: Theme.paddingExtraSmall
 
+        // App Title
         Label {
             width: parent.width
             text: qsTr("Captain's Bible")
@@ -75,10 +201,13 @@ CoverBackground {
             horizontalAlignment: Text.AlignHCenter
         }
 
-        // Dynamic Date
+        // Subheader (Date for VOTD, Mode title for Bookmarks/Ribbons)
         Label {
             width: parent.width
-            text: currentDateStr
+            text: confCoverMode.value === 0
+                  ? currentDateStr
+                  : (confCoverMode.value === 1 ? qsTr("Bookmarks")
+                     : (confCoverMode.value === 2 ? qsTr("Ribbons") : qsTr("Bookmarks & Ribbons")))
             color: Theme.secondaryColor
             font.pixelSize: Theme.fontSizeExtraSmall - 2
             horizontalAlignment: Text.AlignHCenter
@@ -90,53 +219,122 @@ CoverBackground {
             horizontalAlignment: Qt.AlignHCenter
         }
 
-        Column {
+        // Main Content Area
+        Item {
             width: parent.width
-            spacing: Theme.paddingExtraSmall
+            height: parent.height - y
 
-            // Shortened Reference Header (e.g. "1 Kor 1:10")
+            property var activeItem: coverItems.length > 0 ? coverItems[currentListIndex] : null
+
+            // Empty State (No bookmarks or ribbons set)
             Label {
-                id: refLabel
+                anchors.centerIn: parent
                 width: parent.width
-                text: verseRef
-                color: Theme.primaryColor
+                text: confCoverMode.value === 0 ? "" : qsTr("No items set")
+                color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
-                font.bold: true
                 horizontalAlignment: Text.AlignHCenter
-                truncationMode: TruncationMode.Fade
+                visible: !parent.activeItem && confCoverMode.value !== 0
             }
 
-            // Expanded Verse Text Area (fits up to 9 lines gracefully)
-            Label {
-                id: verseLabel
+            // Display Container for Active Item
+            Column {
                 width: parent.width
-                text: verseText
-                color: Theme.primaryColor
-                font.pixelSize: Theme.fontSizeExtraSmall - 1
-                wrapMode: Text.Wrap
-                maximumLineCount: 9
-                truncationMode: TruncationMode.Fade
-                font.italic: true
-                horizontalAlignment: Text.AlignHCenter
+                spacing: Theme.paddingExtraSmall
+                visible: parent.activeItem !== null
+
+                // MODE 3 (Ribbon Layout): Ribbon Icon + Chapter Reference
+                Row {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: Theme.paddingMedium
+                    visible: parent.parent.activeItem ? parent.parent.activeItem.type === "ribbon" : false
+
+                    RibbonIcon {
+                        anchors.verticalCenter: parent.verticalCenter
+                        ribbonColor: parent.parent.parent.activeItem && parent.parent.parent.activeItem.type === "ribbon" ? parent.parent.parent.activeItem.color : Theme.highlightColor
+                        isSet: true
+                        labelText: parent.parent.parent.activeItem && parent.parent.parent.activeItem.type === "ribbon" ? parent.parent.parent.activeItem.id.toString() : "1"
+                    }
+
+                    Label {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: parent.parent.parent.activeItem ? parent.parent.parent.activeItem.ref : ""
+                        color: Theme.primaryColor
+                        font.pixelSize: Theme.fontSizeMedium
+                        font.bold: true
+                        truncationMode: TruncationMode.Fade
+                    }
+                }
+
+                // MODE 1 & 0 (VOTD & Bookmarks Header): Standard Book/Chapter:Verse Ref
+                Label {
+                    width: parent.width
+                    text: parent.parent.activeItem ? parent.parent.activeItem.ref : ""
+                    color: Theme.primaryColor
+                    font.pixelSize: Theme.fontSizeSmall
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    truncationMode: TruncationMode.Fade
+                    visible: parent.parent.activeItem ? parent.parent.activeItem.type !== "ribbon" : false
+                }
+
+                // Verse Text Area (Only rendered for VOTD and Bookmarks)
+                Label {
+                    width: parent.width
+                    text: parent.parent.activeItem && parent.parent.activeItem.text ? parent.parent.activeItem.text : ""
+                    color: Theme.primaryColor
+                    font.pixelSize: Theme.fontSizeExtraSmall - 1
+                    wrapMode: Text.Wrap
+                    maximumLineCount: 8
+                    truncationMode: TruncationMode.Fade
+                    font.italic: true
+                    horizontalAlignment: Text.AlignHCenter
+                    visible: parent.parent.activeItem ? parent.parent.activeItem.type !== "ribbon" : false
+                }
             }
         }
     }
 
+    // Dynamic Cover Action Controls (2-Button Sailfish OS Spec)
     CoverActionList {
         id: coverAction
+        enabled: confCoverMode.value === 0 || coverItems.length > 0
 
+        // LEFT BUTTON: Step backward in VOTD history or cycle bookmarks/ribbons
         CoverAction {
-            iconSource: "image://theme/icon-splus-left"
-            onTriggered: cover.updateContent(cover.daysOffset - 1)
+            iconSource: confCoverMode.value === 0 ? "image://theme/icon-splus-left" : "image://theme/icon-cover-next"
+
+            onTriggered: {
+                if (confCoverMode.value === 0) {
+                    cover.updateVotd(cover.daysOffset - 1)
+                } else if (coverItems.length > 0) {
+                    if (currentListIndex < coverItems.length - 1) {
+                        currentListIndex++
+                    } else {
+                        currentListIndex = 0
+                    }
+                }
+            }
         }
 
+        // RIGHT BUTTON: Step forward in VOTD history (if daysOffset < 0) or Open Play Jump
         CoverAction {
-            iconSource: cover.daysOffset < 0 ? "image://theme/icon-s-right" : "image://theme/icon-s-sync"
+            iconSource: {
+                if (confCoverMode.value === 0 && cover.daysOffset < 0) {
+                    return "image://theme/icon-splus-right"
+                }
+                return "image://theme/icon-cover-play"
+            }
+
             onTriggered: {
-                if (cover.daysOffset < 0) {
-                    cover.updateContent(cover.daysOffset + 1)
+                if (confCoverMode.value === 0) {
+                    if (cover.daysOffset < 0) {
+                        cover.updateVotd(cover.daysOffset + 1)
+                    } else {
+                        cover.openCurrentPassage()
+                    }
                 } else {
-                    cover.updateContent(0)
+                    cover.openCurrentPassage()
                 }
             }
         }

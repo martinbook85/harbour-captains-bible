@@ -65,10 +65,6 @@
 <context>
     <name>CoverPage</name>
     <message>
-        <source>Loading...</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Captain&apos;s Bible</source>
         <translation type="unfinished"></translation>
     </message>
@@ -85,7 +81,23 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>No verse text available for this date.</source>
+        <source>No verse text available.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Bookmarks</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Ribbons</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Bookmarks &amp; Ribbons</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No items set</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -507,6 +519,34 @@
     </message>
     <message>
         <source>Use abbreviated book names (e.g. Joh instead of John) when copying and creating notes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Number of reading ribbons</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cover Page Content</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Verse of the Day</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Bookmarks Only</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Ribbons Only</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Bookmarks &amp; Ribbons</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Disabled (0)</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

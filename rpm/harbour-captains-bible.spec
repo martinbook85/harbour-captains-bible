@@ -1,7 +1,7 @@
 Name:       harbour-captains-bible
 Summary:    Captain's Bible
 Version:    0.4
-Release:    4
+Release:    5
 License:    LICENSE
 URL:        http://example.org/
 Source0:    %{name}-%{version}.tar.bz2
@@ -40,6 +40,10 @@ desktop-file-install --delete-original \
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
+* Tue Nov 10 2026 Martin Book <martin@fambook.nu> 0.4-5
+- Added direct chapter navigation from Cover Page
+- Improved ribbon active state visual indication
+
 * Tue Oct 27 2026 Martin Book <martin@fambook.nu> 0.4-4
 - Feature 3: Added header Ribbon Bookmarks with custom outline icons
 - Added left-aligned positioning, haptic feedback, and visual flash placement indicators

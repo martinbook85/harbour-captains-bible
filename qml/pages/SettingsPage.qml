@@ -35,7 +35,19 @@ Page {
             id: confUseShortBookNames
             key: "/apps/harbour-captains-bible/useShortBookNames"
             defaultValue: false
-        }
+    }
+
+    ConfigurationValue {
+        id: confRibbonCount
+        key: "/apps/harbour-captains-bible/ribbonCount"
+        defaultValue: 3
+    }
+
+    ConfigurationValue {
+        id: confCoverMode
+        key: "/apps/harbour-captains-bible/coverMode"
+        defaultValue: 0 // 0: VOTD, 1: Bookmarks, 2: Ribbons, 3: Both
+    }
 
     SilicaFlickable {
         anchors.fill: parent
@@ -52,6 +64,23 @@ Page {
 
             SectionHeader {
                 text: qsTr("Verse Copying Format")
+            }
+
+            ComboBox {
+                width: parent.width
+                label: qsTr("Cover Page Content")
+                currentIndex: confCoverMode.value
+
+                menu: ContextMenu {
+                    MenuItem { text: qsTr("Verse of the Day") }
+                    MenuItem { text: qsTr("Bookmarks Only") }
+                    MenuItem { text: qsTr("Ribbons Only") }
+                    MenuItem { text: qsTr("Bookmarks & Ribbons") }
+                }
+
+                onCurrentIndexChanged: {
+                    confCoverMode.value = currentIndex
+                }
             }
 
             ComboBox {
@@ -99,6 +128,20 @@ Page {
                 description: qsTr("Add verse numbers before each copied verse")
                 checked: confShowVerseNums.value
                 onCheckedChanged: confShowVerseNums.value = checked
+            }
+
+            Slider {
+                width: parent.width
+                label: qsTr("Number of reading ribbons")
+                minimumValue: 0 // Tillåt 0 ribbons
+                maximumValue: 8
+                stepSize: 1
+                valueText: value === 0 ? qsTr("Disabled (0)") : value.toString()
+                value: confRibbonCount.value
+
+                onValueChanged: {
+                    confRibbonCount.value = Math.round(value)
+                }
             }
 
             TextSwitch {

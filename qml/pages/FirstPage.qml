@@ -18,11 +18,15 @@ Page {
     ConfigurationValue { id: confBookmarks; key: "/apps/harbour-captains-bible/bookmarks"; defaultValue: "[]" }
     ConfigurationValue { id: confTargetVerse; key: "/apps/harbour-captains-bible/targetVerse"; defaultValue: 0 }
 
-    // Persistent Ribbon Bookmarks (Läsband) storage
-    // Format: "bookId|bookName|chapter"
+    ConfigurationValue { id: confRibbonCount; key: "/apps/harbour-captains-bible/ribbonCount"; defaultValue: 3 }
     ConfigurationValue { id: confRibbon1; key: "/apps/harbour-captains-bible/ribbon1"; defaultValue: "" }
     ConfigurationValue { id: confRibbon2; key: "/apps/harbour-captains-bible/ribbon2"; defaultValue: "" }
     ConfigurationValue { id: confRibbon3; key: "/apps/harbour-captains-bible/ribbon3"; defaultValue: "" }
+    ConfigurationValue { id: confRibbon4; key: "/apps/harbour-captains-bible/ribbon4"; defaultValue: "" }
+    ConfigurationValue { id: confRibbon5; key: "/apps/harbour-captains-bible/ribbon5"; defaultValue: "" }
+    ConfigurationValue { id: confRibbon6; key: "/apps/harbour-captains-bible/ribbon6"; defaultValue: "" }
+    ConfigurationValue { id: confRibbon7; key: "/apps/harbour-captains-bible/ribbon7"; defaultValue: "" }
+    ConfigurationValue { id: confRibbon8; key: "/apps/harbour-captains-bible/ribbon8"; defaultValue: "" }
 
     // Clipboard formatting settings
     ConfigurationValue { id: confCopyPlacement; key: "/apps/harbour-captains-bible/copyPlacement"; defaultValue: 0 }
@@ -39,19 +43,18 @@ Page {
     }
 
     DisplayBlanking {
-        // Prevents screen from blanking when setting is active AND page is active
         preventBlanking: confKeepScreenOn.value && page.status === PageStatus.Active
     }
 
     HapticsEffect {
-            id: buttonClickHaptic
-            attackIntensity: 0.0
-            attackTime: 0
-            intensity: 1.0
-            duration: 50
-            fadeIntensity: 0.0
-            fadeTime: 0
-        }
+        id: buttonClickHaptic
+        attackIntensity: 0.0
+        attackTime: 0
+        intensity: 1.0
+        duration: 50
+        fadeIntensity: 0.0
+        fadeTime: 0
+    }
 
     property string selectedModule: confModule.value
     property string selectedBookId: confBookId.value
@@ -75,12 +78,120 @@ Page {
         { bookId: "", bookName: "", chapter: 0, verses: [] }
     ]
 
+    // Color palette for up to 8 ribbons
+    property var ribbonColors: [
+        "#E63946", "#457B9D", "#2A9D8F", "#E9C46A",
+        "#F4A261", "#9C27B0", "#00BCD4", "#E91E63"
+    ]
+
+    property var ribbonConfs: [
+        confRibbon1, confRibbon2, confRibbon3, confRibbon4,
+        confRibbon5, confRibbon6, confRibbon7, confRibbon8
+    ]
+
+    // Ribbon Helpers
+    function isRibbonActive(confRibbon) {
+        if (!confRibbon || !confRibbon.value || confRibbon.value === "") return false
+        var parts = confRibbon.value.split("|")
+        if (parts.length >= 3) {
+            return (parts[0] === selectedBookId && parseInt(parts[2]) === selectedChapter)
+        }
+        return false
+    }
+
+    function getActiveRibbonsModel() {
+        var count = Math.min(Math.max(0, confRibbonCount.value), 8)
+        var list = []
+        for (var i = 0; i < count; i++) {
+            list.push({
+                id: i + 1,
+                conf: ribbonConfs[i],
+                color: ribbonColors[i]
+            })
+        }
+        return list
+    }
+
     property bool isUpdatingBuffer: false
 
     onSelectedModuleChanged: confModule.value = selectedModule
-    onSelectedBookIdChanged: confBookId.value = selectedBookId
+
+    onSelectedBookIdChanged: {
+        confBookId.value = selectedBookId
+        if (!isUpdatingBuffer && selectedBookId !== "") {
+            initializeBuffer()
+        }
+    }
+
     onSelectedBookNameChanged: confBookName.value = selectedBookName
-    onSelectedChapterChanged: confChapter.value = selectedChapter
+
+    onSelectedChapterChanged: {
+        confChapter.value = selectedChapter
+        if (!isUpdatingBuffer && selectedChapter > 0) {
+            initializeBuffer()
+        }
+    }
+
+    // Direct Chapter Navigation (called from CoverPage play button & ApplicationWindow bridge)
+    function loadChapter(bookId, chapter, verse) {
+        if (!bookId || !chapter) return
+
+        var bName = selectedBookName
+        if (typeof bibleManager !== "undefined" && selectedModule !== "") {
+            var fetchedName = bibleManager.getBookName(selectedModule, bookId)
+            if (fetchedName) bName = fetchedName
+        }
+
+        confBookId.value = bookId
+        confBookName.value = bName
+        confChapter.value = chapter
+
+        selectedBookId = bookId
+        selectedBookName = bName
+        selectedChapter = chapter
+
+        initializeBuffer()
+
+        var vTarget = (verse !== undefined && verse > 0) ? verse : confTargetVerse.value
+        if (vTarget > 1) {
+            scrollToVerse(vTarget)
+        }
+    }
+
+    function navigateToPassage(bookId, bookName, chapter, verse) {
+        if (bookName && bookName !== "") {
+            selectedBookName = bookName
+        }
+        loadChapter(bookId, chapter, verse)
+    }
+
+    function reloadPassage() {
+        loadChapter(confBookId.value, confChapter.value, confTargetVerse.value)
+    }
+
+    // Scroll helper & timer for verse positioning
+    property int pendingScrollVerse: 0
+
+    function scrollToVerse(verseNum) {
+        if (!verseNum || verseNum <= 1) return
+        pendingScrollVerse = verseNum
+        scrollToVerseTimer.restart()
+    }
+
+    Timer {
+        id: scrollToVerseTimer
+        interval: 150
+        repeat: false
+        onTriggered: {
+            if (page.pendingScrollVerse <= 1) return
+            var activeItem = slideshow.currentItem
+            if (activeItem && typeof activeItem.scrollToVerseIndex === "function") {
+                activeItem.scrollToVerseIndex(page.pendingScrollVerse)
+            }
+            page.pendingScrollVerse = 0
+            confTargetVerse.value = 0
+        }
+    }
 
     onStatusChanged: {
         if (status === PageStatus.Active) {
@@ -91,6 +202,10 @@ Page {
             }
             bibleManager.refreshModules()
             loadBibles()
+
+            if (confTargetVerse.value > 1) {
+                scrollToVerse(confTargetVerse.value)
+            }
         }
     }
 
@@ -99,7 +214,7 @@ Page {
         if (!confRibbon) return
         var ribbonVal = selectedBookId + "|" + selectedBookName + "|" + selectedChapter
         confRibbon.value = ribbonVal
-        buttonClickHaptic.start() // Trigger short tactile vibration
+        buttonClickHaptic.start()
         console.log("[DEBUG] Ribbon placed:", ribbonVal)
     }
 
@@ -114,7 +229,7 @@ Page {
         }
     }
 
-    // Reliable Top Action Bar for Multi-Selection Mode
+    // Top Action Bar for Multi-Selection Mode
     Rectangle {
         id: selectionOverlay
         width: parent.width
@@ -419,10 +534,14 @@ Page {
 
                 var targetRef = getAdjacentChapterRef(selectedBookId, selectedBookName, selectedChapter, delta)
                 if (targetRef) {
+                    isUpdatingBuffer = true
+
                     selectedBookId = targetRef.bookId
                     selectedBookName = targetRef.bookName
                     selectedChapter = targetRef.chapter
                     activeIndex = currentIndex
+
+                    isUpdatingBuffer = false
                     updateBufferCircular(delta)
                 } else {
                     slideshow.currentIndex = activeIndex
@@ -431,12 +550,27 @@ Page {
         }
 
         delegate: SilicaFlickable {
+            id: chapterFlickable
             width: slideshow.width
             height: slideshow.height
 
             property var pageData: page.bufferSlots[index] ? page.bufferSlots[index] : { bookId: "", bookName: "", chapter: 0, verses: [] }
 
             contentHeight: contentColumn.height + Theme.paddingLarge
+
+            // Helper function to scroll contentY to target verse
+            function scrollToVerseIndex(verseNum) {
+                var verseIndex = verseNum - 1
+                if (verseIndex < 0) return
+
+                if (typeof verseColumn !== "undefined" && verseColumn.children.length > verseIndex) {
+                    var targetItem = verseColumn.children[verseIndex]
+                    if (targetItem) {
+                        var targetY = targetItem.y
+                        chapterFlickable.contentY = Math.min(targetY, contentHeight - height)
+                    }
+                }
+            }
 
             PullDownMenu {
                 MenuItem {
@@ -480,13 +614,10 @@ Page {
                     enabled: page.selectedModule !== ""
                     onClicked: {
                         var dialog = pageStack.push(Qt.resolvedUrl("SelectPage.qml"), {
-                            "moduleName": page.selectedModule
-                        })
-                        dialog.passageSelected.connect(function(bookId, bookName, chapter) {
-                            page.selectedBookId = bookId
-                            page.selectedBookName = bookName
-                            page.selectedChapter = chapter
-                            page.initializeBuffer()
+                             "moduleName": page.selectedModule
+                         })
+                            dialog.passageSelected.connect(function(bookId, bookName, chapter, verse) {
+                            page.navigateToPassage(bookId, bookName, chapter, verse)
                         })
                     }
                 }
@@ -542,40 +673,37 @@ Page {
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.left: parent.left
                             anchors.leftMargin: Theme.horizontalPageMargin
-                            spacing: Theme.paddingLarge // Increased spacing between ribbons
+                            spacing: confRibbonCount.value > 5 ? Theme.paddingSmall : Theme.paddingLarge
 
                             Repeater {
-                                model: [
-                                    { id: 1, conf: confRibbon1, color: "#E63946" }, // Red
-                                    { id: 2, conf: confRibbon2, color: "#457B9D" }, // Blue
-                                    { id: 3, conf: confRibbon3, color: "#2A9D8F" }  // Green
-                                ]
+                                 model: page.getActiveRibbonsModel()
 
-                                delegate: BackgroundItem {
-                                    id: ribbonItemContainer
-                                    width: Theme.iconSizeSmall
-                                    height: Theme.iconSizeMedium
+                                 delegate: BackgroundItem {
+                                      id: ribbonItemContainer
+                                      width: Theme.iconSizeSmall
+                                      height: Theme.iconSizeMedium
 
-                                    RibbonIcon {
-                                        id: rIcon
-                                        anchors.centerIn: parent
-                                        ribbonColor: modelData.color
-                                        isSet: modelData.conf.value !== ""
-                                        labelText: modelData.id.toString()
-                                    }
+                                      RibbonIcon {
+                                         id: rIcon
+                                         anchors.centerIn: parent
+                                         ribbonColor: modelData.color
+                                         isSet: modelData.conf.value !== ""
+                                         isActive: page.isRibbonActive(modelData.conf)
+                                         labelText: modelData.id.toString()
+                                       }
 
-                                    onClicked: {
-                                        if (modelData.conf.value !== "") {
-                                            page.jumpToRibbon(modelData.conf)
-                                        } else {
-                                            page.saveRibbon(modelData.conf)
-                                            rIcon.flash()
-                                        }
-                                    }
+                                     onClicked: {
+                                          if (modelData.conf.value !== "") {
+                                             page.jumpToRibbon(modelData.conf)
+                                          } else {
+                                             page.saveRibbon(modelData.conf)
+                                             rIcon.flash()
+                                          }
+                                     }
 
                                     onPressAndHold: {
-                                        page.saveRibbon(modelData.conf)
-                                        rIcon.flash()
+                                         page.saveRibbon(modelData.conf)
+                                         rIcon.flash()
                                     }
                                 }
                             }
@@ -594,6 +722,7 @@ Page {
                 }
 
                 Column {
+                    id: verseColumn
                     width: parent.width - (2 * Theme.horizontalPageMargin)
                     anchors.horizontalCenter: parent.horizontalCenter
                     spacing: Theme.paddingMedium

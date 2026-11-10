@@ -8,6 +8,7 @@ Item {
 
     property color ribbonColor: Theme.highlightColor
     property bool isSet: false
+    property bool isActive: false // Lit up when reader is on this exact page!
     property string labelText: "1"
     property bool isFlashing: false
 
@@ -25,14 +26,17 @@ Item {
         }
     }
 
-    // Main Ribbon Body (Outline border when set, solid fill when flashing)
+    // Helper to evaluate if the ribbon body should be filled
+    readonly property bool isFilled: ribbonIcon.isFlashing || (ribbonIcon.isSet && ribbonIcon.isActive)
+
+    // Main Ribbon Body (Outline when set, solid fill when lit up active or flashing)
     Rectangle {
         id: bodyRect
         width: parent.width
         anchors.top: parent.top
         anchors.bottom: notchCanvas.top
 
-        color: ribbonIcon.isFlashing ? ribbonIcon.ribbonColor : "transparent"
+        color: ribbonIcon.isFilled ? ribbonIcon.ribbonColor : "transparent"
         border.color: ribbonIcon.isSet ? ribbonIcon.ribbonColor : Theme.secondaryColor
         border.width: ribbonIcon.isSet ? 2 : 1
         opacity: ribbonIcon.isSet ? 1.0 : 0.3
@@ -43,12 +47,12 @@ Item {
             text: ribbonIcon.labelText
             font.pixelSize: Theme.fontSizeSmall
             font.bold: true
-            color: ribbonIcon.isFlashing ? Theme.primaryColor
-                                          : (ribbonIcon.isSet ? ribbonIcon.ribbonColor : Theme.secondaryColor)
+            color: ribbonIcon.isFilled ? Theme.primaryColor
+                                       : (ribbonIcon.isSet ? ribbonIcon.ribbonColor : Theme.secondaryColor)
         }
     }
 
-    // Bottom V-Notch (Canvas shape matching border outline)
+    // Bottom V-Notch (Canvas shape matching fill/border outline)
     Canvas {
         id: notchCanvas
         width: parent.width
@@ -59,7 +63,7 @@ Item {
             var ctx = getContext("2d")
             ctx.reset()
             ctx.strokeStyle = ribbonIcon.isSet ? ribbonIcon.ribbonColor : Theme.secondaryColor
-            ctx.fillStyle = ribbonIcon.isFlashing ? ribbonIcon.ribbonColor : "transparent"
+            ctx.fillStyle = ribbonIcon.isFilled ? ribbonIcon.ribbonColor : "transparent"
             ctx.lineWidth = ribbonIcon.isSet ? 2 : 1
             ctx.globalAlpha = ribbonIcon.isSet ? 1.0 : 0.3
 
@@ -68,7 +72,7 @@ Item {
             ctx.lineTo(width / 2, height)
             ctx.lineTo(width, 0)
 
-            if (ribbonIcon.isFlashing) {
+            if (ribbonIcon.isFilled) {
                 ctx.closePath()
                 ctx.fill()
             }
@@ -78,6 +82,7 @@ Item {
         Connections {
             target: ribbonIcon
             onIsSetChanged: notchCanvas.requestPaint()
+            onIsActiveChanged: notchCanvas.requestPaint()
             onRibbonColorChanged: notchCanvas.requestPaint()
             onIsFlashingChanged: notchCanvas.requestPaint()
         }
