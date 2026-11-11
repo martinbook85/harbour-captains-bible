@@ -8,6 +8,11 @@ CoverBackground {
 
     // Configuration Keys
     ConfigurationValue { id: confModule; key: "/apps/harbour-captains-bible/selectedModule"; defaultValue: "" }
+    ConfigurationValue { id: confBookId; key: "/apps/harbour-captains-bible/selectedBookId"; defaultValue: "Gen" }
+    ConfigurationValue { id: confBookName; key: "/apps/harbour-captains-bible/selectedBookName"; defaultValue: "Genesis" }
+    ConfigurationValue { id: confChapter; key: "/apps/harbour-captains-bible/selectedChapter"; defaultValue: 1 }
+    ConfigurationValue { id: confTargetVerse; key: "/apps/harbour-captains-bible/targetVerse"; defaultValue: 0 }
+
     ConfigurationValue { id: confCoverMode; key: "/apps/harbour-captains-bible/coverMode"; defaultValue: 0 } // 0: VOTD, 1: Bookmarks, 2: Ribbons, 3: Both
     ConfigurationValue { id: confRibbonCount; key: "/apps/harbour-captains-bible/ribbonCount"; defaultValue: 3 }
 
@@ -41,7 +46,7 @@ CoverBackground {
         return Qt.formatDate(d, "d MMMM yyyy")
     }
 
-    // Deep-linking helper to navigate inside the app
+    // Deep-linking helper: Updates persistent state keys and activates window
     function openCurrentPassage() {
         var item = coverItems.length > 0 ? coverItems[currentListIndex] : null
         if (!item) return
@@ -49,19 +54,22 @@ CoverBackground {
         var targetBookId = item.bookId || "Gen"
         var targetBookName = item.bookName || ""
         var targetChapter = item.chapter || 1
-        var targetVerse = item.verse || 1
+        var targetVerse = item.verse || 0
 
         // Resolve display book name if missing
         if ((!targetBookName || targetBookName === "") && typeof bibleManager !== "undefined" && confModule.value !== "") {
             targetBookName = bibleManager.getBookName(confModule.value, targetBookId) || targetBookId
         }
 
-        // Use global appWindow reference directly to activate app and trigger navigation
+        // Write directly to configuration storage
+        confBookId.value = targetBookId
+        confBookName.value = targetBookName
+        confChapter.value = targetChapter
+        confTargetVerse.value = targetVerse
+
+        // Activate main app window; FirstPage's onStatusChanged will sync state
         if (typeof appWindow !== "undefined" && appWindow) {
             appWindow.activate()
-            if (typeof appWindow.jumpToPassage === "function") {
-                appWindow.jumpToPassage(targetBookId, targetBookName, targetChapter, targetVerse)
-            }
         }
     }
 
@@ -117,7 +125,7 @@ CoverBackground {
                             type: "ribbon",
                             id: i + 1,
                             color: ribbonColors[i],
-                            ref: parts[1] + " " + parts[2], // e.g. "1 Kor 10"
+                            ref: parts[1] + " " + parts[2],
                             bookId: parts[0],
                             bookName: parts[1],
                             chapter: parseInt(parts[2]),
@@ -243,7 +251,7 @@ CoverBackground {
                 spacing: Theme.paddingExtraSmall
                 visible: parent.activeItem !== null
 
-                // MODE 3 (Ribbon Layout): Ribbon Icon + Chapter Reference
+                // MODE 2 & 3 (Ribbon Layout): Ribbon Icon + Chapter Reference
                 Row {
                     anchors.horizontalCenter: parent.horizontalCenter
                     spacing: Theme.paddingMedium
@@ -266,7 +274,7 @@ CoverBackground {
                     }
                 }
 
-                // MODE 1 & 0 (VOTD & Bookmarks Header): Standard Book/Chapter:Verse Ref
+                // MODE 0 & 1 (VOTD & Bookmarks Header): Standard Book/Chapter:Verse Ref
                 Label {
                     width: parent.width
                     text: parent.parent.activeItem ? parent.parent.activeItem.ref : ""

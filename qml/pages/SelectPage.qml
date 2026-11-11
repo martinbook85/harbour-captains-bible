@@ -10,7 +10,7 @@ Page {
     property string selectedBookName: ""
     property int selectedChapter: 1
 
-    signal passageSelected(string bookId, string bookName, int chapter)
+    signal passageSelected(string bookId, string bookName, int chapter, int verse)
 
     property var booksList: []
     property int totalChapters: 0
@@ -52,7 +52,7 @@ Page {
 
         readonly property real colWidth: width / 3
 
-        // --- KOLUMN 1: BÖCKER ---
+        // --- COLUMN 1: BOOKS ---
         SilicaListView {
             width: parent.colWidth
             height: parent.height
@@ -75,7 +75,7 @@ Page {
             VerticalScrollDecorator {}
         }
 
-        // --- KOLUMN 2: KAPITEL ---
+        // --- COLUMN 2: CHAPTERS ---
         SilicaListView {
             width: parent.colWidth
             height: parent.height
@@ -95,7 +95,7 @@ Page {
             VerticalScrollDecorator {}
         }
 
-        // --- KOLUMN 3: VERSER ---
+        // --- COLUMN 3: VERSES ---
         SilicaListView {
             width: parent.colWidth
             height: parent.height
@@ -103,7 +103,7 @@ Page {
             delegate: ListItem {
                 contentHeight: Theme.itemSizeSmall
                 onClicked: {
-                    page.passageSelected(page.selectedBookId, page.selectedBookName, page.selectedChapter)
+                    page.passageSelected(page.selectedBookId, page.selectedBookName, page.selectedChapter, index + 1)
                     pageStack.pop()
                 }
 

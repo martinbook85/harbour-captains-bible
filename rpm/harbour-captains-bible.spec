@@ -1,7 +1,7 @@
 Name:       harbour-captains-bible
 Summary:    Captain's Bible
 Version:    0.4
-Release:    6
+Release:    7
 License:    LICENSE
 URL:        http://example.org/
 Source0:    %{name}-%{version}.tar.bz2
@@ -40,6 +40,12 @@ desktop-file-install --delete-original \
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
+* Thu Nov 12 2026 Martin Book <martin@fambook.nu> 0.4-7
+- Re-introduced dynamic Cover Page content modes (Verse of the Day, Bookmarks, Ribbons, and Combined)
+- Added direct passage activation from Cover Page play button via Nemo.Configuration synchronization
+- Added automatic verse scrolling when selecting a verse from SelectPage or opening from the Cover Page
+- Simplified ApplicationWindow architecture and removed redundant signal bridges
+
 * Wed Nov 11 2026 Martin Book <martin@fambook.nu> 0.4-6
 - Reverted QML navigation to stable baseline
 - Fixed chapter text rendering issue on passage selection

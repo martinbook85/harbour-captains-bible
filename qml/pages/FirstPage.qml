@@ -9,14 +9,41 @@ Page {
     allowedOrientations: Orientation.All
 
     // Persistent state storage
-    ConfigurationValue { id: confModule; key: "/apps/harbour-captains-bible/selectedModule"; defaultValue: "" }
-    ConfigurationValue { id: confBookId; key: "/apps/harbour-captains-bible/selectedBookId"; defaultValue: "Gen" }
-    ConfigurationValue { id: confBookName; key: "/apps/harbour-captains-bible/selectedBookName"; defaultValue: "Genesis" }
-    ConfigurationValue { id: confChapter; key: "/apps/harbour-captains-bible/selectedChapter"; defaultValue: 1 }
+    ConfigurationValue {
+        id: confModule
+        key: "/apps/harbour-captains-bible/selectedModule"
+        defaultValue: ""
+    }
+    ConfigurationValue {
+        id: confBookId
+        key: "/apps/harbour-captains-bible/selectedBookId"
+        defaultValue: "Gen"
+        onValueChanged: page.syncFromExternalConfig()
+    }
+    ConfigurationValue {
+        id: confBookName
+        key: "/apps/harbour-captains-bible/selectedBookName"
+        defaultValue: "Genesis"
+    }
+    ConfigurationValue {
+        id: confChapter
+        key: "/apps/harbour-captains-bible/selectedChapter"
+        defaultValue: 1
+        onValueChanged: page.syncFromExternalConfig()
+    }
 
     // Persistent bookmarks storage
     ConfigurationValue { id: confBookmarks; key: "/apps/harbour-captains-bible/bookmarks"; defaultValue: "[]" }
-    ConfigurationValue { id: confTargetVerse; key: "/apps/harbour-captains-bible/targetVerse"; defaultValue: 0 }
+    ConfigurationValue {
+        id: confTargetVerse
+        key: "/apps/harbour-captains-bible/targetVerse"
+        defaultValue: 0
+        onValueChanged: {
+            if (value > 1) {
+                page.scrollToVerse(value)
+            }
+        }
+    }
 
     // Persistent Ribbon Bookmarks (Läsband) storage (0 to 8)
     // Format: "bookId|bookName|chapter"
@@ -45,7 +72,6 @@ Page {
     }
 
     DisplayBlanking {
-        // Prevents screen from blanking when setting is active AND page is active
         preventBlanking: confKeepScreenOn.value && page.status === PageStatus.Active
     }
 
@@ -116,11 +142,47 @@ Page {
     }
 
     property bool isUpdatingBuffer: false
+    property int pendingScrollVerse: 0
 
     onSelectedModuleChanged: confModule.value = selectedModule
     onSelectedBookIdChanged: confBookId.value = selectedBookId
     onSelectedBookNameChanged: confBookName.value = selectedBookName
     onSelectedChapterChanged: confChapter.value = selectedChapter
+
+    // Reacts immediately when CoverPage or BookmarksPage updates dconf keys externally
+    function syncFromExternalConfig() {
+        if (isUpdatingBuffer) return
+        if (confBookId.value !== selectedBookId || confChapter.value !== selectedChapter) {
+            selectedBookId = confBookId.value
+            selectedBookName = confBookName.value
+            selectedChapter = confChapter.value
+            initializeBuffer()
+            if (confTargetVerse.value > 1) {
+                scrollToVerse(confTargetVerse.value)
+            }
+        }
+    }
+
+    function scrollToVerse(verseNum) {
+        if (!verseNum || verseNum <= 1) return
+        pendingScrollVerse = verseNum
+        scrollToVerseTimer.restart()
+    }
+
+    Timer {
+        id: scrollToVerseTimer
+        interval: 120
+        repeat: false
+        onTriggered: {
+            if (page.pendingScrollVerse <= 1) return
+            var activeFlickable = slideshow.currentItem
+            if (activeFlickable && typeof activeFlickable.scrollToVerseIndex === "function") {
+                activeFlickable.scrollToVerseIndex(page.pendingScrollVerse)
+            }
+            page.pendingScrollVerse = 0
+            confTargetVerse.value = 0
+        }
+    }
 
     onStatusChanged: {
         if (status === PageStatus.Active) {
@@ -131,6 +193,9 @@ Page {
             }
             bibleManager.refreshModules()
             loadBibles()
+            if (confTargetVerse.value > 1) {
+                scrollToVerse(confTargetVerse.value)
+            }
         }
     }
 
@@ -139,7 +204,7 @@ Page {
         if (!confRibbon) return
         var ribbonVal = selectedBookId + "|" + selectedBookName + "|" + selectedChapter
         confRibbon.value = ribbonVal
-        buttonClickHaptic.start() // Trigger short tactile vibration
+        buttonClickHaptic.start()
         console.log("[DEBUG] Ribbon placed:", ribbonVal)
     }
 
@@ -262,6 +327,9 @@ Page {
 
     Component.onCompleted: {
         loadBibles()
+        if (confTargetVerse.value > 1) {
+            scrollToVerse(confTargetVerse.value)
+        }
     }
 
     function loadBibles() {
@@ -471,12 +539,24 @@ Page {
         }
 
         delegate: SilicaFlickable {
+            id: chapterFlickable
             width: slideshow.width
             height: slideshow.height
 
             property var pageData: page.bufferSlots[index] ? page.bufferSlots[index] : { bookId: "", bookName: "", chapter: 0, verses: [] }
 
             contentHeight: contentColumn.height + Theme.paddingLarge
+
+            function scrollToVerseIndex(verseNum) {
+                var verseIdx = verseNum - 1
+                if (verseIdx < 0 || verseIdx >= verseRepeater.count) return
+                var item = verseRepeater.itemAt(verseIdx)
+                if (item) {
+                    var targetY = verseListColumn.y + item.y - Theme.paddingMedium
+                    var maxScroll = Math.max(0, chapterFlickable.contentHeight - chapterFlickable.height)
+                    chapterFlickable.contentY = Math.min(Math.max(0, targetY), maxScroll)
+                }
+            }
 
             PullDownMenu {
                 MenuItem {
@@ -522,11 +602,14 @@ Page {
                         var dialog = pageStack.push(Qt.resolvedUrl("SelectPage.qml"), {
                             "moduleName": page.selectedModule
                         })
-                        dialog.passageSelected.connect(function(bookId, bookName, chapter) {
+                        dialog.passageSelected.connect(function(bookId, bookName, chapter, verse) {
                             page.selectedBookId = bookId
                             page.selectedBookName = bookName
                             page.selectedChapter = chapter
                             page.initializeBuffer()
+                            if (verse > 1) {
+                                page.scrollToVerse(verse)
+                            }
                         })
                     }
                 }
@@ -631,11 +714,13 @@ Page {
                 }
 
                 Column {
+                    id: verseListColumn
                     width: parent.width - (2 * Theme.horizontalPageMargin)
                     anchors.horizontalCenter: parent.horizontalCenter
                     spacing: Theme.paddingMedium
 
                     Repeater {
+                        id: verseRepeater
                         model: pageData.verses ? pageData.verses : []
 
                         delegate: ListItem {
