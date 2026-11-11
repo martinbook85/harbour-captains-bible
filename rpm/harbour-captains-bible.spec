@@ -1,7 +1,7 @@
 Name:       harbour-captains-bible
 Summary:    Captain's Bible
 Version:    0.4
-Release:    5
+Release:    6
 License:    LICENSE
 URL:        http://example.org/
 Source0:    %{name}-%{version}.tar.bz2
@@ -40,6 +40,12 @@ desktop-file-install --delete-original \
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
+* Wed Nov 11 2026 Martin Book <martin@fambook.nu> 0.4-6
+- Reverted QML navigation to stable baseline
+- Fixed chapter text rendering issue on passage selection
+- Restored reliable 3-slot circular buffer
+- Maintained 0-8 dynamic reading ribbons
+
 * Tue Nov 10 2026 Martin Book <martin@fambook.nu> 0.4-5
 - Added direct chapter navigation from Cover Page
 - Improved ribbon active state visual indication

@@ -10,8 +10,7 @@ Page {
     property string selectedBookName: ""
     property int selectedChapter: 1
 
-    // 1. Utökad signal som tar med targetVerse!
-    signal passageSelected(string bookId, string bookName, int chapter, int verse)
+    signal passageSelected(string bookId, string bookName, int chapter)
 
     property var booksList: []
     property int totalChapters: 0
@@ -104,9 +103,7 @@ Page {
             delegate: ListItem {
                 contentHeight: Theme.itemSizeSmall
                 onClicked: {
-                    var selectedVerse = index + 1
-                    // 2. Skicka med valda versen i signalen!
-                    page.passageSelected(page.selectedBookId, page.selectedBookName, page.selectedChapter, selectedVerse)
+                    page.passageSelected(page.selectedBookId, page.selectedBookName, page.selectedChapter)
                     pageStack.pop()
                 }
 
